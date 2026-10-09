@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -13,7 +14,7 @@ func TestHealth(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/health", nil)
 	response := httptest.NewRecorder()
 
-	NewRouter().ServeHTTP(response, request)
+	NewRouter(readinessCheckerFunc(func(context.Context) error { return nil })).ServeHTTP(response, request)
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("status code = %d, want %d", response.Code, http.StatusOK)
@@ -39,7 +40,7 @@ func TestHealthRejectsUnsupportedMethod(t *testing.T) {
 	request := httptest.NewRequest(http.MethodPost, "/health", nil)
 	response := httptest.NewRecorder()
 
-	NewRouter().ServeHTTP(response, request)
+	NewRouter(readinessCheckerFunc(func(context.Context) error { return nil })).ServeHTTP(response, request)
 
 	if response.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("status code = %d, want %d", response.Code, http.StatusMethodNotAllowed)

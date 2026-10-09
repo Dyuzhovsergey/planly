@@ -19,32 +19,43 @@ Planly — многопользовательское веб-приложени�
 
 ## Статус
 
-Минимальные модели `User` и `Task`, правила времени, аутентификация и REST API согласованы. Создан каркас Go API с диагностическим endpoint `GET /health`; PostgreSQL и продуктовые endpoints ещё не реализованы.
+Минимальные модели `User` и `Task`, правила времени, аутентификация и REST API согласованы. API предоставляет `GET /health` и `GET /ready`; локальный PostgreSQL и первая миграция `users` добавлены. Продуктовые endpoints ещё не реализованы.
 
-## Локальный запуск API
+## Локальный запуск
 
-Требуется Go 1.26 или новее.
+Требуются Go 1.26 или новее и Docker с Docker Compose.
 
 ```bash
+cp .env.example .env
+docker compose up -d postgres
+set -a; source .env; set +a
+go run ./cmd/migrate up
 go run ./cmd/api
 ```
 
-По умолчанию сервер слушает `:8080`. Адрес можно изменить переменной окружения:
+PostgreSQL использует именованный Docker volume, поэтому данные сохраняются после остановки контейнера. Команда миграции идемпотентна: повторный запуск не применяет уже выполненные миграции заново.
 
-```bash
-HTTP_ADDR=:8090 go run ./cmd/api
-```
+По умолчанию API слушает `:8080`. Адрес можно изменить переменной окружения `HTTP_ADDR`.
 
-Проверка работающего процесса:
+Проверка процесса и готовности PostgreSQL:
 
 ```bash
 curl -i http://localhost:8080/health
+curl -i http://localhost:8080/ready
 ```
 
-Ожидаемый JSON-ответ:
+Оба запроса возвращают `200 OK` и:
 
 ```json
 {"status":"ok"}
+```
+
+Если PostgreSQL недоступен, `/health` остаётся успешным, а `/ready` возвращает `503 Service Unavailable` в формате `application/problem+json`.
+
+Остановка локальных сервисов без удаления данных:
+
+```bash
+docker compose stop
 ```
 
 Автоматические проверки:
@@ -53,6 +64,7 @@ curl -i http://localhost:8080/health
 go test ./...
 go vet ./...
 go build ./...
+docker compose config --quiet
 ```
 
 ## Документы

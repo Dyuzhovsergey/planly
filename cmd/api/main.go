@@ -11,13 +11,12 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Dyuzhovsergey/planly/internal/config"
 	"github.com/Dyuzhovsergey/planly/internal/httpapi"
+	"github.com/Dyuzhovsergey/planly/internal/platform/postgres"
 )
 
-const (
-	defaultHTTPAddr = ":8080"
-	shutdownTimeout = 5 * time.Second
-)
+const shutdownTimeout = 5 * time.Second
 
 func main() {
 	if err := run(); err != nil {
@@ -27,21 +26,27 @@ func main() {
 }
 
 func run() error {
-	addr := os.Getenv("HTTP_ADDR")
-	if addr == "" {
-		addr = defaultHTTPAddr
+	appConfig, err := config.Load()
+	if err != nil {
+		return fmt.Errorf("load configuration: %w", err)
 	}
 
+	database, err := postgres.Open(context.Background(), appConfig.DatabaseURL)
+	if err != nil {
+		return fmt.Errorf("open database pool: %w", err)
+	}
+	defer database.Close()
+
 	server := &http.Server{
-		Addr:              addr,
-		Handler:           httpapi.NewRouter(),
+		Addr:              appConfig.HTTPAddr,
+		Handler:           httpapi.NewRouter(database),
 		ReadHeaderTimeout: 5 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
 
 	serverErrors := make(chan error, 1)
 	go func() {
-		slog.Info("starting HTTP server", "address", addr)
+		slog.Info("starting HTTP server", "address", appConfig.HTTPAddr)
 		serverErrors <- server.ListenAndServe()
 	}()
 
