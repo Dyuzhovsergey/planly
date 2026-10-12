@@ -33,11 +33,13 @@
 ## Аутентификация
 
 - Пользователь входит по email и паролю; пароль хранится только как хеш Argon2id.
+- HTTP handlers отвечают за JSON, Origin, CSRF и cookie; auth service — за валидацию, пароли и срок сессии; PostgreSQL repository — за SQL и транзакции.
 - После регистрации или входа сервер создаёт непрозрачную сессию, хранит в PostgreSQL хеш её токена и отправляет исходный токен в cookie.
 - Production-cookie использует `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`, не задаёт `Domain` и имеет абсолютный срок 30 дней.
 - Выход удаляет сессию на сервере и очищает cookie.
 - Изменяющие запросы защищаются проверкой `Origin` и CSRF-токеном в заголовке `X-CSRF-Token`; произвольный CORS не разрешается.
 - Токены аутентификации не хранятся в `localStorage` или `sessionStorage`.
+- Для локального HTTP используется cookie `planly_session` без `Secure`; при production-настройке API переключается на `__Host-planly_session` с обязательным `Secure`.
 
 ## Данные и безопасность
 

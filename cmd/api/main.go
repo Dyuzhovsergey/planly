@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Dyuzhovsergey/planly/internal/auth"
 	"github.com/Dyuzhovsergey/planly/internal/config"
 	"github.com/Dyuzhovsergey/planly/internal/httpapi"
 	"github.com/Dyuzhovsergey/planly/internal/platform/postgres"
@@ -37,9 +38,22 @@ func run() error {
 	}
 	defer database.Close()
 
+	authRepository := postgres.NewAuthRepository(database)
+	authService, err := auth.NewService(authRepository)
+	if err != nil {
+		return fmt.Errorf("create authentication service: %w", err)
+	}
+
 	server := &http.Server{
-		Addr:              appConfig.HTTPAddr,
-		Handler:           httpapi.NewRouter(database),
+		Addr: appConfig.HTTPAddr,
+		Handler: httpapi.NewRouter(httpapi.Dependencies{
+			Database: database,
+			Auth:     authService,
+			AuthConfig: httpapi.AuthConfig{
+				AllowedOrigin: appConfig.AppOrigin,
+				CookieSecure:  appConfig.CookieSecure,
+			},
+		}),
 		ReadHeaderTimeout: 5 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
