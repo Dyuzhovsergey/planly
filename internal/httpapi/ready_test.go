@@ -18,7 +18,7 @@ func (check readinessCheckerFunc) Ping(ctx context.Context) error {
 func TestReadyWhenDatabaseIsAvailable(t *testing.T) {
 	t.Parallel()
 
-	router := NewRouter(readinessCheckerFunc(func(context.Context) error { return nil }))
+	router := NewRouter(Dependencies{Database: readinessCheckerFunc(func(context.Context) error { return nil })})
 	request := httptest.NewRequest(http.MethodGet, "/ready", nil)
 	response := httptest.NewRecorder()
 
@@ -38,9 +38,9 @@ func TestReadyWhenDatabaseIsAvailable(t *testing.T) {
 func TestReadyWhenDatabaseIsUnavailable(t *testing.T) {
 	t.Parallel()
 
-	router := NewRouter(readinessCheckerFunc(func(context.Context) error {
+	router := NewRouter(Dependencies{Database: readinessCheckerFunc(func(context.Context) error {
 		return errors.New("database is unavailable")
-	}))
+	})})
 	request := httptest.NewRequest(http.MethodGet, "/ready", nil)
 	response := httptest.NewRecorder()
 
@@ -63,7 +63,7 @@ func TestReadyWhenDatabaseIsUnavailable(t *testing.T) {
 func TestReadyRejectsUnsupportedMethod(t *testing.T) {
 	t.Parallel()
 
-	router := NewRouter(readinessCheckerFunc(func(context.Context) error { return nil }))
+	router := NewRouter(Dependencies{Database: readinessCheckerFunc(func(context.Context) error { return nil })})
 	request := httptest.NewRequest(http.MethodPost, "/ready", nil)
 	response := httptest.NewRecorder()
 

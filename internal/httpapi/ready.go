@@ -23,19 +23,3 @@ func handleReady(database ReadinessChecker) http.HandlerFunc {
 		_ = json.NewEncoder(response).Encode(map[string]string{"status": "ok"})
 	}
 }
-
-func writeProblem(response http.ResponseWriter, status int, code string) {
-	response.Header().Set("Content-Type", "application/problem+json")
-	response.WriteHeader(status)
-	_ = json.NewEncoder(response).Encode(struct {
-		Type   string `json:"type"`
-		Title  string `json:"title"`
-		Status int    `json:"status"`
-		Code   string `json:"code"`
-	}{
-		Type:   "about:blank",
-		Title:  http.StatusText(status),
-		Status: status,
-		Code:   code,
-	})
-}

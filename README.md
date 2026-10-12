@@ -19,7 +19,7 @@ Planly — многопользовательское веб-приложени�
 
 ## Статус
 
-Минимальные модели `User` и `Task`, правила времени, аутентификация и REST API согласованы. API предоставляет `GET /health` и `GET /ready`; локальный PostgreSQL и первая миграция `users` добавлены. Продуктовые endpoints ещё не реализованы.
+Минимальные модели `User` и `Task`, правила времени, аутентификация и REST API согласованы. API предоставляет диагностику, регистрацию, вход и выход через серверные PostgreSQL-сессии. `GET/PATCH /me`, Task и frontend ещё не реализованы.
 
 ## Локальный запуск
 
@@ -52,6 +52,31 @@ curl -i http://localhost:8080/ready
 
 Если PostgreSQL недоступен, `/health` остаётся успешным, а `/ready` возвращает `503 Service Unavailable` в формате `application/problem+json`.
 
+### Проверка аутентификации
+
+`APP_ORIGIN` определяет единственный разрешённый browser origin. Для локальной проверки он равен `http://localhost:8080`.
+
+Регистрация с сохранением cookie в файл:
+
+```bash
+curl -i -c /tmp/planly-cookie.txt \
+  -H 'Origin: http://localhost:8080' \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"user@example.com","password":"correct horse battery staple","timeZone":"Europe/Moscow"}' \
+  http://localhost:8080/api/v1/auth/register
+```
+
+Ответ содержит публичного пользователя и `csrfToken`. Для выхода подставьте этот токен:
+
+```bash
+curl -i -b /tmp/planly-cookie.txt \
+  -H 'Origin: http://localhost:8080' \
+  -H 'X-CSRF-Token: <csrfToken>' \
+  -X POST http://localhost:8080/api/v1/auth/logout
+```
+
+В локальном HTTP-режиме используется cookie `planly_session`. При `COOKIE_SECURE=true` API использует production-cookie `__Host-planly_session` с атрибутом `Secure`.
+
 Остановка локальных сервисов без удаления данных:
 
 ```bash
@@ -65,6 +90,12 @@ go test ./...
 go vet ./...
 go build ./...
 docker compose config --quiet
+```
+
+Интеграционные repository-тесты после запуска PostgreSQL и миграций:
+
+```bash
+PLANLY_TEST_DATABASE_URL="$DATABASE_URL" go test ./internal/platform/postgres -run Integration
 ```
 
 ## Документы
