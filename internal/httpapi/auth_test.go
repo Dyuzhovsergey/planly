@@ -16,13 +16,16 @@ const testOrigin = "http://localhost:8080"
 
 type fakeAuthService struct {
 	result             auth.AuthResult
+	identity           auth.SessionIdentity
 	registerErr        error
 	loginErr           error
 	logoutErr          error
+	authenticateErr    error
 	registered         auth.RegisterInput
 	loggedIn           auth.LoginInput
 	logoutSessionToken string
 	logoutCSRFToken    string
+	authenticatedToken string
 }
 
 func (service *fakeAuthService) Register(_ context.Context, input auth.RegisterInput) (auth.AuthResult, error) {
@@ -39,6 +42,11 @@ func (service *fakeAuthService) Logout(_ context.Context, sessionToken, csrfToke
 	service.logoutSessionToken = sessionToken
 	service.logoutCSRFToken = csrfToken
 	return service.logoutErr
+}
+
+func (service *fakeAuthService) Authenticate(_ context.Context, sessionToken string) (auth.SessionIdentity, error) {
+	service.authenticatedToken = sessionToken
+	return service.identity, service.authenticateErr
 }
 
 func TestRegisterSetsLocalSessionCookie(t *testing.T) {

@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
@@ -9,6 +10,8 @@ import (
 )
 
 const tokenBytes = 32
+
+const csrfPurpose = "planly.csrf.v1"
 
 func newToken(random io.Reader) (string, []byte, error) {
 	raw := make([]byte, tokenBytes)
@@ -23,6 +26,12 @@ func newToken(random io.Reader) (string, []byte, error) {
 func hashToken(token string) []byte {
 	hash := sha256.Sum256([]byte(token))
 	return hash[:]
+}
+
+func deriveCSRFToken(sessionToken string) string {
+	mac := hmac.New(sha256.New, []byte(sessionToken))
+	_, _ = mac.Write([]byte(csrfPurpose))
+	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 }
 
 var cryptoRandom io.Reader = rand.Reader

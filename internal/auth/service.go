@@ -149,15 +149,49 @@ func (service *Service) Logout(ctx context.Context, sessionToken, csrfToken stri
 	return service.repository.DeleteSession(ctx, tokenHash)
 }
 
+// Authenticate restores a trusted user identity from an unexpired session token.
+func (service *Service) Authenticate(ctx context.Context, sessionToken string) (SessionIdentity, error) {
+	if sessionToken == "" {
+		return SessionIdentity{}, ErrUnauthenticated
+	}
+
+	tokenHash := hashToken(sessionToken)
+	sessionUser, err := service.repository.FindSessionUser(ctx, tokenHash)
+	if errors.Is(err, ErrNotFound) {
+		return SessionIdentity{}, ErrUnauthenticated
+	}
+	if err != nil {
+		return SessionIdentity{}, err
+	}
+	if !sessionUser.Session.ExpiresAt.After(service.now()) {
+		_ = service.repository.DeleteSession(ctx, tokenHash)
+		return SessionIdentity{}, ErrUnauthenticated
+	}
+
+	csrfToken := deriveCSRFToken(sessionToken)
+	csrfHash := hashToken(csrfToken)
+	if subtle.ConstantTimeCompare(csrfHash, sessionUser.Session.CSRFTokenHash) != 1 {
+		if err := service.repository.UpdateSessionCSRF(ctx, tokenHash, csrfHash); err != nil {
+			if errors.Is(err, ErrNotFound) {
+				return SessionIdentity{}, ErrUnauthenticated
+			}
+			return SessionIdentity{}, err
+		}
+	}
+
+	return SessionIdentity{
+		User:      sessionUser.User,
+		CSRFToken: csrfToken,
+	}, nil
+}
+
 func (service *Service) createSession(userID string) (Session, string, string, error) {
 	sessionToken, tokenHash, err := newToken(service.random)
 	if err != nil {
 		return Session{}, "", "", err
 	}
-	csrfToken, csrfHash, err := newToken(service.random)
-	if err != nil {
-		return Session{}, "", "", err
-	}
+	csrfToken := deriveCSRFToken(sessionToken)
+	csrfHash := hashToken(csrfToken)
 
 	createdAt := service.now().UTC()
 	return Session{

@@ -29,6 +29,7 @@ func NewRouter(dependencies Dependencies) http.Handler {
 		router.HandleFunc("POST /api/v1/auth/register", auth.register)
 		router.HandleFunc("POST /api/v1/auth/login", auth.login)
 		router.HandleFunc("POST /api/v1/auth/logout", auth.logout)
+		router.Handle("GET /api/v1/me", auth.requireSession(http.HandlerFunc(auth.me)))
 	}
 
 	return router

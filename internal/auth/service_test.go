@@ -9,14 +9,18 @@ import (
 )
 
 type fakeRepository struct {
-	user             User
-	session          Session
-	createUserErr    error
-	findUserErr      error
-	createSessionErr error
-	findSessionErr   error
-	deleteSessionErr error
-	deletedHash      []byte
+	user               User
+	session            Session
+	sessionUser        SessionUser
+	createUserErr      error
+	findUserErr        error
+	createSessionErr   error
+	findSessionErr     error
+	findSessionUserErr error
+	updateSessionErr   error
+	deleteSessionErr   error
+	deletedHash        []byte
+	updatedCSRFHash    []byte
 }
 
 func (repository *fakeRepository) CreateUserAndSession(_ context.Context, params CreateUserParams, session Session) (User, error) {
@@ -43,6 +47,15 @@ func (repository *fakeRepository) FindSession(context.Context, []byte) (Session,
 	return repository.session, repository.findSessionErr
 }
 
+func (repository *fakeRepository) FindSessionUser(context.Context, []byte) (SessionUser, error) {
+	return repository.sessionUser, repository.findSessionUserErr
+}
+
+func (repository *fakeRepository) UpdateSessionCSRF(_ context.Context, _ []byte, csrfHash []byte) error {
+	repository.updatedCSRFHash = append([]byte(nil), csrfHash...)
+	return repository.updateSessionErr
+}
+
 func (repository *fakeRepository) DeleteSession(_ context.Context, tokenHash []byte) error {
 	repository.deletedHash = append([]byte(nil), tokenHash...)
 	return repository.deleteSessionErr
@@ -66,6 +79,12 @@ func TestRegisterNormalizesEmailAndCreatesSession(t *testing.T) {
 	}
 	if result.SessionToken == "" || result.CSRFToken == "" {
 		t.Fatal("Register() returned empty client tokens")
+	}
+	if result.CSRFToken != deriveCSRFToken(result.SessionToken) {
+		t.Error("Register() returned a CSRF token unrelated to the session token")
+	}
+	if !bytes.Equal(repository.session.CSRFTokenHash, hashToken(result.CSRFToken)) {
+		t.Error("Register() persisted a different CSRF token hash")
 	}
 	if repository.session.UserID != "" {
 		t.Errorf("registration session UserID = %q, want repository-assigned user", repository.session.UserID)
@@ -155,6 +174,76 @@ func TestLogoutRejectsInvalidCSRF(t *testing.T) {
 	}
 	if repository.deletedHash != nil {
 		t.Error("Logout() deleted session after invalid CSRF")
+	}
+}
+
+func TestAuthenticateReturnsTrustedUserAndMigratesLegacyCSRF(t *testing.T) {
+	now := time.Date(2026, time.October, 12, 10, 0, 0, 0, time.UTC)
+	repository := &fakeRepository{sessionUser: SessionUser{
+		Session: Session{
+			CSRFTokenHash: hashToken("legacy-random-csrf-token"),
+			ExpiresAt:     now.Add(time.Hour),
+		},
+		User: User{ID: "user-id", Email: "user@example.com", TimeZone: "Europe/Moscow"},
+	}}
+	service := newTestService(t, repository, now)
+
+	identity, err := service.Authenticate(context.Background(), "session-token")
+	if err != nil {
+		t.Fatalf("Authenticate() error = %v", err)
+	}
+	if identity.User.ID != "user-id" {
+		t.Errorf("user ID = %q, want user-id", identity.User.ID)
+	}
+	wantCSRF := deriveCSRFToken("session-token")
+	if identity.CSRFToken != wantCSRF {
+		t.Errorf("CSRF token = %q, want deterministic token", identity.CSRFToken)
+	}
+	if !bytes.Equal(repository.updatedCSRFHash, hashToken(wantCSRF)) {
+		t.Error("Authenticate() did not migrate the legacy CSRF hash")
+	}
+}
+
+func TestAuthenticateKeepsCurrentCSRFHash(t *testing.T) {
+	now := time.Date(2026, time.October, 12, 10, 0, 0, 0, time.UTC)
+	csrfToken := deriveCSRFToken("session-token")
+	repository := &fakeRepository{sessionUser: SessionUser{
+		Session: Session{CSRFTokenHash: hashToken(csrfToken), ExpiresAt: now.Add(time.Hour)},
+		User:    User{ID: "user-id"},
+	}}
+	service := newTestService(t, repository, now)
+
+	if _, err := service.Authenticate(context.Background(), "session-token"); err != nil {
+		t.Fatalf("Authenticate() error = %v", err)
+	}
+	if repository.updatedCSRFHash != nil {
+		t.Error("Authenticate() rewrote an already current CSRF hash")
+	}
+}
+
+func TestAuthenticateRejectsExpiredSessionAndDeletesIt(t *testing.T) {
+	now := time.Date(2026, time.October, 12, 10, 0, 0, 0, time.UTC)
+	repository := &fakeRepository{sessionUser: SessionUser{
+		Session: Session{ExpiresAt: now},
+		User:    User{ID: "user-id"},
+	}}
+	service := newTestService(t, repository, now)
+
+	_, err := service.Authenticate(context.Background(), "expired-session-token")
+	if !errors.Is(err, ErrUnauthenticated) {
+		t.Fatalf("Authenticate() error = %v, want ErrUnauthenticated", err)
+	}
+	if !bytes.Equal(repository.deletedHash, hashToken("expired-session-token")) {
+		t.Error("Authenticate() did not delete the expired session")
+	}
+}
+
+func TestAuthenticateHidesUnknownSession(t *testing.T) {
+	service := newTestService(t, &fakeRepository{findSessionUserErr: ErrNotFound}, time.Now())
+
+	_, err := service.Authenticate(context.Background(), "unknown-session-token")
+	if !errors.Is(err, ErrUnauthenticated) {
+		t.Fatalf("Authenticate() error = %v, want ErrUnauthenticated", err)
 	}
 }
 

@@ -23,6 +23,7 @@ type AuthService interface {
 	Register(context.Context, auth.RegisterInput) (auth.AuthResult, error)
 	Login(context.Context, auth.LoginInput) (auth.AuthResult, error)
 	Logout(context.Context, string, string) error
+	Authenticate(context.Context, string) (auth.SessionIdentity, error)
 }
 
 // AuthConfig contains browser-facing authentication settings.
@@ -210,13 +211,17 @@ func decodeJSON(response http.ResponseWriter, request *http.Request, destination
 
 func makeAuthResponse(result auth.AuthResult) authResponse {
 	return authResponse{
-		User: userResponse{
-			ID:        result.User.ID,
-			Email:     result.User.Email,
-			TimeZone:  result.User.TimeZone,
-			CreatedAt: result.User.CreatedAt.UTC(),
-		},
+		User:      makeUserResponse(result.User),
 		CSRFToken: result.CSRFToken,
+	}
+}
+
+func makeUserResponse(user auth.User) userResponse {
+	return userResponse{
+		ID:        user.ID,
+		Email:     user.Email,
+		TimeZone:  user.TimeZone,
+		CreatedAt: user.CreatedAt.UTC(),
 	}
 }
 

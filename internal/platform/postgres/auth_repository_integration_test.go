@@ -1,6 +1,7 @@
 package postgres
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"errors"
@@ -66,6 +67,25 @@ func TestAuthRepositoryIntegration(t *testing.T) {
 	}
 	if foundSession.UserID != user.ID {
 		t.Errorf("session user ID = %q, want %q", foundSession.UserID, user.ID)
+	}
+
+	sessionUser, err := repository.FindSessionUser(ctx, firstSession.TokenHash)
+	if err != nil {
+		t.Fatalf("FindSessionUser() error = %v", err)
+	}
+	if sessionUser.User.ID != user.ID || sessionUser.User.Email != firstEmail {
+		t.Errorf("session user = %+v, want ID %q and email %q", sessionUser.User, user.ID, firstEmail)
+	}
+	updatedCSRFHash := testHash(firstEmail + "-updated-csrf")
+	if err := repository.UpdateSessionCSRF(ctx, firstSession.TokenHash, updatedCSRFHash); err != nil {
+		t.Fatalf("UpdateSessionCSRF() error = %v", err)
+	}
+	updatedSession, err := repository.FindSession(ctx, firstSession.TokenHash)
+	if err != nil {
+		t.Fatalf("FindSession() after CSRF update error = %v", err)
+	}
+	if !bytes.Equal(updatedSession.CSRFTokenHash, updatedCSRFHash) {
+		t.Error("UpdateSessionCSRF() did not persist the new hash")
 	}
 
 	conflictingSession := auth.Session{

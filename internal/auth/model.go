@@ -38,6 +38,18 @@ type Session struct {
 	ExpiresAt     time.Time
 }
 
+// SessionUser combines a persisted session with its trusted owner.
+type SessionUser struct {
+	Session Session
+	User    User
+}
+
+// SessionIdentity contains the public identity restored from a valid session.
+type SessionIdentity struct {
+	User      User
+	CSRFToken string
+}
+
 // AuthResult contains credentials that may be returned to an authenticated client.
 type AuthResult struct {
 	User             User
