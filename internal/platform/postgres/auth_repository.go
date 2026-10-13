@@ -130,6 +130,54 @@ func (repository *AuthRepository) FindSession(ctx context.Context, tokenHash []b
 	return session, nil
 }
 
+// FindSessionUser returns a session and the public fields of its trusted owner.
+func (repository *AuthRepository) FindSessionUser(ctx context.Context, tokenHash []byte) (auth.SessionUser, error) {
+	var sessionUser auth.SessionUser
+	err := repository.pool.QueryRow(ctx, `
+		SELECT
+			s.token_hash, s.user_id, s.csrf_token_hash, s.created_at, s.expires_at,
+			u.id, u.email, u.time_zone, u.created_at, u.updated_at
+		FROM sessions AS s
+		JOIN users AS u ON u.id = s.user_id
+		WHERE s.token_hash = $1
+	`, tokenHash).Scan(
+		&sessionUser.Session.TokenHash,
+		&sessionUser.Session.UserID,
+		&sessionUser.Session.CSRFTokenHash,
+		&sessionUser.Session.CreatedAt,
+		&sessionUser.Session.ExpiresAt,
+		&sessionUser.User.ID,
+		&sessionUser.User.Email,
+		&sessionUser.User.TimeZone,
+		&sessionUser.User.CreatedAt,
+		&sessionUser.User.UpdatedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return auth.SessionUser{}, auth.ErrNotFound
+	}
+	if err != nil {
+		return auth.SessionUser{}, fmt.Errorf("find session user: %w", err)
+	}
+
+	return sessionUser, nil
+}
+
+// UpdateSessionCSRF replaces the CSRF hash for an existing session.
+func (repository *AuthRepository) UpdateSessionCSRF(ctx context.Context, tokenHash, csrfTokenHash []byte) error {
+	result, err := repository.pool.Exec(ctx, `
+		UPDATE sessions
+		SET csrf_token_hash = $2
+		WHERE token_hash = $1
+	`, tokenHash, csrfTokenHash)
+	if err != nil {
+		return fmt.Errorf("update session CSRF: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return auth.ErrNotFound
+	}
+	return nil
+}
+
 // DeleteSession removes one session identified by its token hash.
 func (repository *AuthRepository) DeleteSession(ctx context.Context, tokenHash []byte) error {
 	if _, err := repository.pool.Exec(ctx, `DELETE FROM sessions WHERE token_hash = $1`, tokenHash); err != nil {

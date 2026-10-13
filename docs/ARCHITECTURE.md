@@ -35,6 +35,8 @@
 - Пользователь входит по email и паролю; пароль хранится только как хеш Argon2id.
 - HTTP handlers отвечают за JSON, Origin, CSRF и cookie; auth service — за валидацию, пароли и срок сессии; PostgreSQL repository — за SQL и транзакции.
 - После регистрации или входа сервер создаёт непрозрачную сессию, хранит в PostgreSQL хеш её токена и отправляет исходный токен в cookie.
+- Reusable HTTP middleware восстанавливает доверенную личность по session-cookie, а handlers защищённых endpoints получают её из `request.Context` и не принимают `user_id` от клиента.
+- CSRF-токен сессии детерминированно выводится из session-токена через HMAC-SHA256 с разделением назначения. Это позволяет `GET /api/v1/me` восстановить токен после перезагрузки, не раскрывая HttpOnly session-cookie; в PostgreSQL по-прежнему хранится только хеш CSRF-токена.
 - Production-cookie использует `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`, не задаёт `Domain` и имеет абсолютный срок 30 дней.
 - Выход удаляет сессию на сервере и очищает cookie.
 - Изменяющие запросы защищаются проверкой `Origin` и CSRF-токеном в заголовке `X-CSRF-Token`; произвольный CORS не разрешается.
