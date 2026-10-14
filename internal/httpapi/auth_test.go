@@ -21,11 +21,15 @@ type fakeAuthService struct {
 	loginErr           error
 	logoutErr          error
 	authenticateErr    error
+	updateTimeZoneErr  error
 	registered         auth.RegisterInput
 	loggedIn           auth.LoginInput
 	logoutSessionToken string
 	logoutCSRFToken    string
 	authenticatedToken string
+	updatedUserID      string
+	updatedTimeZone    auth.UpdateTimeZoneInput
+	updatedUser        auth.User
 }
 
 func (service *fakeAuthService) Register(_ context.Context, input auth.RegisterInput) (auth.AuthResult, error) {
@@ -47,6 +51,12 @@ func (service *fakeAuthService) Logout(_ context.Context, sessionToken, csrfToke
 func (service *fakeAuthService) Authenticate(_ context.Context, sessionToken string) (auth.SessionIdentity, error) {
 	service.authenticatedToken = sessionToken
 	return service.identity, service.authenticateErr
+}
+
+func (service *fakeAuthService) UpdateTimeZone(_ context.Context, userID string, input auth.UpdateTimeZoneInput) (auth.User, error) {
+	service.updatedUserID = userID
+	service.updatedTimeZone = input
+	return service.updatedUser, service.updateTimeZoneErr
 }
 
 func TestRegisterSetsLocalSessionCookie(t *testing.T) {

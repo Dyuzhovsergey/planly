@@ -76,6 +76,19 @@ func TestAuthRepositoryIntegration(t *testing.T) {
 	if sessionUser.User.ID != user.ID || sessionUser.User.Email != firstEmail {
 		t.Errorf("session user = %+v, want ID %q and email %q", sessionUser.User, user.ID, firstEmail)
 	}
+	updatedUser, err := repository.UpdateUserTimeZone(ctx, user.ID, "Asia/Tokyo")
+	if err != nil {
+		t.Fatalf("UpdateUserTimeZone() error = %v", err)
+	}
+	if updatedUser.ID != user.ID || updatedUser.TimeZone != "Asia/Tokyo" {
+		t.Errorf("updated user = %+v, want ID %q and time zone Asia/Tokyo", updatedUser, user.ID)
+	}
+	if updatedUser.PasswordHash != "" {
+		t.Error("UpdateUserTimeZone() returned a password hash")
+	}
+	if _, err := repository.UpdateUserTimeZone(ctx, "00000000-0000-0000-0000-000000000000", "UTC"); !errors.Is(err, auth.ErrNotFound) {
+		t.Fatalf("missing user update error = %v, want ErrNotFound", err)
+	}
 	updatedCSRFHash := testHash(firstEmail + "-updated-csrf")
 	if err := repository.UpdateSessionCSRF(ctx, firstSession.TokenHash, updatedCSRFHash); err != nil {
 		t.Fatalf("UpdateSessionCSRF() error = %v", err)

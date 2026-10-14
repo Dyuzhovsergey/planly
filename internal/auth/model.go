@@ -71,6 +71,11 @@ type LoginInput struct {
 	Password string
 }
 
+// UpdateTimeZoneInput contains the editable current-user setting.
+type UpdateTimeZoneInput struct {
+	TimeZone string
+}
+
 // ValidationError describes field-level input problems.
 type ValidationError struct {
 	Fields map[string][]string

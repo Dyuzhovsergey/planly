@@ -152,7 +152,7 @@ Name=__Host-planly_session; HttpOnly; Secure; SameSite=Lax; Path=/
 }
 ```
 
-Регистрация, вход и `GET /api/v1/me` возвращают:
+Регистрация, вход, `GET /api/v1/me` и `PATCH /api/v1/me` возвращают единый auth-envelope:
 
 ```json
 {
@@ -165,6 +165,16 @@ Name=__Host-planly_session; HttpOnly; Secure; SameSite=Lax; Path=/
   "csrfToken": "opaque-token"
 }
 ```
+
+Изменение часовой зоны:
+
+```json
+{
+  "timeZone": "Asia/Tokyo"
+}
+```
+
+`PATCH /api/v1/me` принимает только поле `timeZone`, использует пользователя из проверенной сессии и требует допустимые `Origin` и `X-CSRF-Token`. Значение очищается от крайних пробелов и должно быть именем IANA. Успешное обновление не меняет и не продлевает сессию, поэтому ответ содержит текущий CSRF-токен.
 
 Ответ на неверный email или пароль одинаков и не раскрывает, существует ли пользователь.
 
