@@ -14,6 +14,7 @@ import (
 // TaskService describes task operations required by HTTP handlers.
 type TaskService interface {
 	Create(context.Context, string, task.CreateInput) (task.Task, error)
+	GetByID(context.Context, string, string) (task.Task, error)
 }
 
 type taskHandler struct {
@@ -88,7 +89,33 @@ func (handler *taskHandler) create(response http.ResponseWriter, request *http.R
 	writeJSON(response, http.StatusCreated, result)
 }
 
+func (handler *taskHandler) getByID(response http.ResponseWriter, request *http.Request) {
+	identity, ok := sessionIdentityFromContext(request.Context())
+	if !ok {
+		writeProblem(response, http.StatusUnauthorized, "authentication_required")
+		return
+	}
+
+	found, err := handler.service.GetByID(request.Context(), identity.User.ID, request.PathValue("id"))
+	if err != nil {
+		handler.writeError(response, err)
+		return
+	}
+
+	result, err := makeTaskResponse(found)
+	if err != nil {
+		handler.writeError(response, err)
+		return
+	}
+	writeJSON(response, http.StatusOK, result)
+}
+
 func (handler *taskHandler) writeError(response http.ResponseWriter, err error) {
+	if errors.Is(err, task.ErrNotFound) {
+		writeProblem(response, http.StatusNotFound, "task_not_found")
+		return
+	}
+
 	var validationErr *task.ValidationError
 	if errors.As(err, &validationErr) {
 		writeProblemWithErrors(response, http.StatusUnprocessableEntity, "validation_failed", validationErr.Fields)

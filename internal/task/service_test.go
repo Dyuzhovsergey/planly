@@ -13,6 +13,10 @@ type fakeRepository struct {
 	createdParams CreateParams
 	createdTask   Task
 	createErr     error
+	foundUserID   string
+	foundTaskID   string
+	foundTask     Task
+	findErr       error
 }
 
 func (repository *fakeRepository) Create(_ context.Context, userID string, params CreateParams) (Task, error) {
@@ -21,8 +25,10 @@ func (repository *fakeRepository) Create(_ context.Context, userID string, param
 	return repository.createdTask, repository.createErr
 }
 
-func (repository *fakeRepository) FindByID(context.Context, string, string) (Task, error) {
-	return Task{}, ErrNotFound
+func (repository *fakeRepository) FindByID(_ context.Context, userID, taskID string) (Task, error) {
+	repository.foundUserID = userID
+	repository.foundTaskID = taskID
+	return repository.foundTask, repository.findErr
 }
 
 func TestServiceCreateNormalizesTimedTaskAndUsesTrustedOwner(t *testing.T) {
@@ -128,6 +134,54 @@ func TestServiceCreatePropagatesRepositoryError(t *testing.T) {
 	})
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("Create() error = %v, want %v", err, wantErr)
+	}
+}
+
+func TestServiceGetByIDUsesTrustedOwner(t *testing.T) {
+	const taskID = "0199c471-a941-7b29-87af-59c00893d91c"
+	repository := &fakeRepository{foundTask: Task{ID: taskID}}
+	service := NewService(repository)
+
+	found, err := service.GetByID(context.Background(), "trusted-user-id", taskID)
+	if err != nil {
+		t.Fatalf("GetByID() error = %v", err)
+	}
+	if found.ID != taskID {
+		t.Fatalf("GetByID() task ID = %q, want %q", found.ID, taskID)
+	}
+	if repository.foundUserID != "trusted-user-id" || repository.foundTaskID != taskID {
+		t.Errorf("FindByID() arguments = %q, %q, want trusted owner and task ID", repository.foundUserID, repository.foundTaskID)
+	}
+}
+
+func TestServiceGetByIDRejectsInvalidIDAsNotFound(t *testing.T) {
+	for _, taskID := range []string{
+		"not-a-uuid",
+		"0199c471a941-7b29-87af-59c00893d91c",
+		"0199c471-a941-7b29-87af-59c00893d91g",
+	} {
+		t.Run(taskID, func(t *testing.T) {
+			repository := &fakeRepository{}
+			service := NewService(repository)
+
+			_, err := service.GetByID(context.Background(), "trusted-user-id", taskID)
+			if !errors.Is(err, ErrNotFound) {
+				t.Fatalf("GetByID() error = %v, want ErrNotFound", err)
+			}
+			if repository.foundUserID != "" || repository.foundTaskID != "" {
+				t.Error("FindByID() called for an invalid task ID")
+			}
+		})
+	}
+}
+
+func TestServiceGetByIDPropagatesRepositoryError(t *testing.T) {
+	wantErr := errors.New("database unavailable")
+	service := NewService(&fakeRepository{findErr: wantErr})
+
+	_, err := service.GetByID(context.Background(), "trusted-user-id", "0199c471-a941-7b29-87af-59c00893d91c")
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("GetByID() error = %v, want %v", err, wantErr)
 	}
 }
 

@@ -39,6 +39,34 @@ func (service *Service) Create(ctx context.Context, userID string, input CreateI
 	})
 }
 
+// GetByID returns a task only when it belongs to the trusted owner.
+func (service *Service) GetByID(ctx context.Context, userID, taskID string) (Task, error) {
+	if !isUUID(taskID) {
+		return Task{}, ErrNotFound
+	}
+
+	return service.repository.FindByID(ctx, userID, taskID)
+}
+
+func isUUID(value string) bool {
+	if len(value) != 36 || value[8] != '-' || value[13] != '-' || value[18] != '-' || value[23] != '-' {
+		return false
+	}
+
+	for index, character := range []byte(value) {
+		if index == 8 || index == 13 || index == 18 || index == 23 {
+			continue
+		}
+		if !((character >= '0' && character <= '9') ||
+			(character >= 'a' && character <= 'f') ||
+			(character >= 'A' && character <= 'F')) {
+			return false
+		}
+	}
+
+	return true
+}
+
 func validateTaskText(title, description string) map[string][]string {
 	fields := make(map[string][]string)
 
