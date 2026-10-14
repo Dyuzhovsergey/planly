@@ -213,6 +213,8 @@ Name=__Host-planly_session; HttpOnly; Secure; SameSite=Lax; Path=/
 }
 ```
 
+`POST /api/v1/tasks` принимает только `title`, необязательный `description` и `schedule`. Неизвестные поля, включая `userId`, отклоняются; владелец всегда берётся из проверенной сессии. Успешный ответ `201 Created` содержит публичное представление `Task` без `userId`.
+
 `PATCH` принимает только изменяемые поля `title`, `description`, `schedule` и `completed`. Объект `schedule` заменяется целиком. Пустой объект и неизвестные поля отклоняются.
 
 Завершение задачи:

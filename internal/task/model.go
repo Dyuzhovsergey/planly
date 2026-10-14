@@ -8,6 +8,29 @@ import (
 
 const calendarDateLayout = "2006-01-02"
 
+// ValidationError describes field-level task input problems.
+type ValidationError struct {
+	Fields map[string][]string
+}
+
+func (err *ValidationError) Error() string {
+	return "validation failed"
+}
+
+// CreateInput contains untrusted values used by the task creation use case.
+type CreateInput struct {
+	Title       string
+	Description string
+	Schedule    CreateScheduleInput
+}
+
+// CreateScheduleInput is the external representation of a timed or all-day schedule.
+type CreateScheduleInput struct {
+	Type string
+	At   string
+	Date string
+}
+
 // CalendarDate is a date without a time of day or time zone.
 type CalendarDate struct {
 	year  int
