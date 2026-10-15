@@ -19,8 +19,12 @@ type fakeRepository struct {
 	findSessionUserErr error
 	updateSessionErr   error
 	deleteSessionErr   error
+	updateTimeZoneErr  error
 	deletedHash        []byte
 	updatedCSRFHash    []byte
+	updatedUserID      string
+	updatedTimeZone    string
+	updatedUser        User
 }
 
 func (repository *fakeRepository) CreateUserAndSession(_ context.Context, params CreateUserParams, session Session) (User, error) {
@@ -54,6 +58,12 @@ func (repository *fakeRepository) FindSessionUser(context.Context, []byte) (Sess
 func (repository *fakeRepository) UpdateSessionCSRF(_ context.Context, _ []byte, csrfHash []byte) error {
 	repository.updatedCSRFHash = append([]byte(nil), csrfHash...)
 	return repository.updateSessionErr
+}
+
+func (repository *fakeRepository) UpdateUserTimeZone(_ context.Context, userID, timeZone string) (User, error) {
+	repository.updatedUserID = userID
+	repository.updatedTimeZone = timeZone
+	return repository.updatedUser, repository.updateTimeZoneErr
 }
 
 func (repository *fakeRepository) DeleteSession(_ context.Context, tokenHash []byte) error {
@@ -244,6 +254,51 @@ func TestAuthenticateHidesUnknownSession(t *testing.T) {
 	_, err := service.Authenticate(context.Background(), "unknown-session-token")
 	if !errors.Is(err, ErrUnauthenticated) {
 		t.Fatalf("Authenticate() error = %v, want ErrUnauthenticated", err)
+	}
+}
+
+func TestUpdateTimeZoneValidatesAndPersistsForTrustedUser(t *testing.T) {
+	repository := &fakeRepository{updatedUser: User{ID: "user-id", TimeZone: "Asia/Tokyo"}}
+	service := newTestService(t, repository, time.Now())
+
+	user, err := service.UpdateTimeZone(context.Background(), "user-id", UpdateTimeZoneInput{
+		TimeZone: "  Asia/Tokyo  ",
+	})
+	if err != nil {
+		t.Fatalf("UpdateTimeZone() error = %v", err)
+	}
+	if repository.updatedUserID != "user-id" || repository.updatedTimeZone != "Asia/Tokyo" {
+		t.Errorf("repository update = (%q, %q), want (user-id, Asia/Tokyo)", repository.updatedUserID, repository.updatedTimeZone)
+	}
+	if user.TimeZone != "Asia/Tokyo" {
+		t.Errorf("returned time zone = %q, want Asia/Tokyo", user.TimeZone)
+	}
+}
+
+func TestUpdateTimeZoneRejectsInvalidZone(t *testing.T) {
+	repository := &fakeRepository{}
+	service := newTestService(t, repository, time.Now())
+
+	_, err := service.UpdateTimeZone(context.Background(), "user-id", UpdateTimeZoneInput{TimeZone: "Mars/Olympus"})
+	var validationErr *ValidationError
+	if !errors.As(err, &validationErr) {
+		t.Fatalf("UpdateTimeZone() error = %v, want ValidationError", err)
+	}
+	if len(validationErr.Fields["timeZone"]) == 0 {
+		t.Error("validation error does not contain timeZone")
+	}
+	if repository.updatedUserID != "" {
+		t.Error("repository called after invalid time zone")
+	}
+}
+
+func TestUpdateTimeZoneMapsMissingUserToUnauthenticated(t *testing.T) {
+	repository := &fakeRepository{updateTimeZoneErr: ErrNotFound}
+	service := newTestService(t, repository, time.Now())
+
+	_, err := service.UpdateTimeZone(context.Background(), "missing-user", UpdateTimeZoneInput{TimeZone: "UTC"})
+	if !errors.Is(err, ErrUnauthenticated) {
+		t.Fatalf("UpdateTimeZone() error = %v, want ErrUnauthenticated", err)
 	}
 }
 

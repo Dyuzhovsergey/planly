@@ -24,6 +24,7 @@ type AuthService interface {
 	Login(context.Context, auth.LoginInput) (auth.AuthResult, error)
 	Logout(context.Context, string, string) error
 	Authenticate(context.Context, string) (auth.SessionIdentity, error)
+	UpdateTimeZone(context.Context, string, auth.UpdateTimeZoneInput) (auth.User, error)
 }
 
 // AuthConfig contains browser-facing authentication settings.

@@ -15,6 +15,7 @@ import (
 	"github.com/Dyuzhovsergey/planly/internal/config"
 	"github.com/Dyuzhovsergey/planly/internal/httpapi"
 	"github.com/Dyuzhovsergey/planly/internal/platform/postgres"
+	"github.com/Dyuzhovsergey/planly/internal/task"
 )
 
 const shutdownTimeout = 5 * time.Second
@@ -43,12 +44,15 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("create authentication service: %w", err)
 	}
+	taskRepository := postgres.NewTaskRepository(database)
+	taskService := task.NewService(taskRepository)
 
 	server := &http.Server{
 		Addr: appConfig.HTTPAddr,
 		Handler: httpapi.NewRouter(httpapi.Dependencies{
 			Database: database,
 			Auth:     authService,
+			Tasks:    taskService,
 			AuthConfig: httpapi.AuthConfig{
 				AllowedOrigin: appConfig.AppOrigin,
 				CookieSecure:  appConfig.CookieSecure,

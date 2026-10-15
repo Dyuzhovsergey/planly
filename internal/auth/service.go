@@ -185,6 +185,25 @@ func (service *Service) Authenticate(ctx context.Context, sessionToken string) (
 	}, nil
 }
 
+// UpdateTimeZone validates and persists the current user's calendar time zone.
+func (service *Service) UpdateTimeZone(ctx context.Context, userID string, input UpdateTimeZoneInput) (User, error) {
+	timeZone := strings.TrimSpace(input.TimeZone)
+	if !isValidTimeZone(timeZone) {
+		return User{}, &ValidationError{Fields: map[string][]string{
+			"timeZone": {"must be a valid IANA time zone"},
+		}}
+	}
+
+	user, err := service.repository.UpdateUserTimeZone(ctx, userID, timeZone)
+	if errors.Is(err, ErrNotFound) {
+		return User{}, ErrUnauthenticated
+	}
+	if err != nil {
+		return User{}, err
+	}
+	return user, nil
+}
+
 func (service *Service) createSession(userID string) (Session, string, string, error) {
 	sessionToken, tokenHash, err := newToken(service.random)
 	if err != nil {
@@ -217,7 +236,7 @@ func validateRegistration(email, password, timeZone string) *ValidationError {
 	if length := len([]rune(password)); length < minimumPasswordLength || length > maximumPasswordLength {
 		fields["password"] = []string{"must contain between 15 and 128 characters"}
 	}
-	if _, err := time.LoadLocation(timeZone); err != nil {
+	if !isValidTimeZone(timeZone) {
 		fields["timeZone"] = []string{"must be a valid IANA time zone"}
 	}
 
@@ -225,4 +244,9 @@ func validateRegistration(email, password, timeZone string) *ValidationError {
 		return nil
 	}
 	return &ValidationError{Fields: fields}
+}
+
+func isValidTimeZone(timeZone string) bool {
+	_, err := time.LoadLocation(timeZone)
+	return err == nil
 }

@@ -178,6 +178,30 @@ func (repository *AuthRepository) UpdateSessionCSRF(ctx context.Context, tokenHa
 	return nil
 }
 
+// UpdateUserTimeZone changes one user's calendar time zone and returns public user fields.
+func (repository *AuthRepository) UpdateUserTimeZone(ctx context.Context, userID, timeZone string) (auth.User, error) {
+	var user auth.User
+	err := repository.pool.QueryRow(ctx, `
+		UPDATE users
+		SET time_zone = $2, updated_at = now()
+		WHERE id = $1
+		RETURNING id, email, time_zone, created_at, updated_at
+	`, userID, timeZone).Scan(
+		&user.ID,
+		&user.Email,
+		&user.TimeZone,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return auth.User{}, auth.ErrNotFound
+	}
+	if err != nil {
+		return auth.User{}, fmt.Errorf("update user time zone: %w", err)
+	}
+	return user, nil
+}
+
 // DeleteSession removes one session identified by its token hash.
 func (repository *AuthRepository) DeleteSession(ctx context.Context, tokenHash []byte) error {
 	if _, err := repository.pool.Exec(ctx, `DELETE FROM sessions WHERE token_hash = $1`, tokenHash); err != nil {

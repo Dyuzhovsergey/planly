@@ -15,6 +15,7 @@ type ReadinessChecker interface {
 type Dependencies struct {
 	Database   ReadinessChecker
 	Auth       AuthService
+	Tasks      TaskService
 	AuthConfig AuthConfig
 }
 
@@ -30,6 +31,25 @@ func NewRouter(dependencies Dependencies) http.Handler {
 		router.HandleFunc("POST /api/v1/auth/login", auth.login)
 		router.HandleFunc("POST /api/v1/auth/logout", auth.logout)
 		router.Handle("GET /api/v1/me", auth.requireSession(http.HandlerFunc(auth.me)))
+		router.Handle(
+			"PATCH /api/v1/me",
+			auth.requireOrigin(auth.requireSession(auth.requireCSRF(http.HandlerFunc(auth.updateMe)))),
+		)
+		if dependencies.Tasks != nil {
+			tasks := newTaskHandler(dependencies.Tasks)
+			router.Handle(
+				"GET /api/v1/tasks",
+				auth.requireSession(http.HandlerFunc(tasks.list)),
+			)
+			router.Handle(
+				"GET /api/v1/tasks/{id}",
+				auth.requireSession(http.HandlerFunc(tasks.getByID)),
+			)
+			router.Handle(
+				"POST /api/v1/tasks",
+				auth.requireOrigin(auth.requireSession(auth.requireCSRF(http.HandlerFunc(tasks.create)))),
+			)
+		}
 	}
 
 	return router

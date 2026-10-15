@@ -19,7 +19,7 @@ Planly — многопользовательское веб-приложени�
 
 ## Статус
 
-Минимальные модели `User` и `Task`, правила времени, аутентификация и REST API согласованы. API предоставляет диагностику, регистрацию, вход, восстановление пользователя через `GET /api/v1/me` и выход через серверные PostgreSQL-сессии. `PATCH /me`, Task и frontend ещё не реализованы.
+Минимальные модели `User` и `Task`, правила времени, аутентификация и REST API согласованы. API предоставляет диагностику, регистрацию, вход, получение и изменение часовой зоны текущего пользователя через `/api/v1/me`, выход, защищённое создание timed/all-day задач через `POST /api/v1/tasks`, получение одной своей задачи через `GET /api/v1/tasks/{id}` и список задач календарного диапазона через `GET /api/v1/tasks?from=&to=`. Изменение и удаление задач, а также frontend ещё не реализованы.
 
 ## Локальный запуск
 
@@ -74,7 +74,54 @@ curl -i -c /tmp/planly-cookie.txt \
 curl -i -b /tmp/planly-cookie.txt http://localhost:8080/api/v1/me
 ```
 
-`GET /api/v1/me` возвращает публичного пользователя и детерминированный для текущей сессии `csrfToken`. Для выхода подставьте этот токен:
+`GET /api/v1/me` возвращает публичного пользователя и детерминированный для текущей сессии `csrfToken`.
+
+Изменение часовой зоны текущего пользователя:
+
+```bash
+curl -i -b /tmp/planly-cookie.txt \
+  -H 'Origin: http://localhost:8080' \
+  -H 'X-CSRF-Token: <csrfToken>' \
+  -H 'Content-Type: application/json' \
+  -X PATCH \
+  -d '{"timeZone":"Asia/Tokyo"}' \
+  http://localhost:8080/api/v1/me
+```
+
+Успешный ответ содержит обновлённого пользователя и тот же `csrfToken`.
+
+Создание timed-задачи с `csrfToken` из ответа регистрации, входа или `GET /api/v1/me`:
+
+```bash
+curl -i -b /tmp/planly-cookie.txt \
+  -H 'Origin: http://localhost:8080' \
+  -H 'X-CSRF-Token: <csrfToken>' \
+  -H 'Content-Type: application/json' \
+  -d '{"title":"Позвонить врачу","schedule":{"type":"timed","at":"2026-10-14T18:30:00+03:00"}}' \
+  http://localhost:8080/api/v1/tasks
+```
+
+Успешный ответ имеет статус `201 Created`, не содержит `userId` и возвращает точный момент в UTC.
+
+Получение созданной задачи по её `id` требует только session-cookie:
+
+```bash
+curl -i -b /tmp/planly-cookie.txt \
+  http://localhost:8080/api/v1/tasks/<taskId>
+```
+
+Своя задача возвращается с `200 OK`. Отсутствующая, чужая задача и идентификатор не в UUID-формате возвращают одинаковый `404 task_not_found`; `Origin` и CSRF для безопасного `GET` не требуются.
+
+Получение своих задач за календарный диапазон также требует только session-cookie:
+
+```bash
+curl -i -b /tmp/planly-cookie.txt \
+  'http://localhost:8080/api/v1/tasks?from=2026-10-01&to=2026-11-01'
+```
+
+`from` включается, `to` не включается. Обе границы задаются как `YYYY-MM-DD` в текущей IANA-таймзоне пользователя; максимальная длина диапазона — 366 дней. Ответ имеет вид `{"items":[]}` и не содержит `userId`.
+
+Для выхода подставьте текущий `csrfToken`:
 
 ```bash
 curl -i -b /tmp/planly-cookie.txt \
