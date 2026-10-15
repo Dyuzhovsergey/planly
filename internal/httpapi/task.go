@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/Dyuzhovsergey/planly/internal/task"
@@ -15,6 +16,7 @@ import (
 type TaskService interface {
 	Create(context.Context, string, task.CreateInput) (task.Task, error)
 	GetByID(context.Context, string, string) (task.Task, error)
+	List(context.Context, string, string, task.ListInput) ([]task.Task, error)
 }
 
 type taskHandler struct {
@@ -48,6 +50,10 @@ type taskScheduleResponse struct {
 	Type string `json:"type"`
 	At   string `json:"at,omitempty"`
 	Date string `json:"date,omitempty"`
+}
+
+type taskListResponse struct {
+	Items []taskResponse `json:"items"`
 }
 
 func newTaskHandler(service TaskService) *taskHandler {
@@ -108,6 +114,55 @@ func (handler *taskHandler) getByID(response http.ResponseWriter, request *http.
 		return
 	}
 	writeJSON(response, http.StatusOK, result)
+}
+
+func (handler *taskHandler) list(response http.ResponseWriter, request *http.Request) {
+	identity, ok := sessionIdentityFromContext(request.Context())
+	if !ok {
+		writeProblem(response, http.StatusUnauthorized, "authentication_required")
+		return
+	}
+
+	input, ok := parseTaskListQuery(request.URL.RawQuery)
+	if !ok {
+		writeProblem(response, http.StatusBadRequest, "invalid_request")
+		return
+	}
+
+	listed, err := handler.service.List(
+		request.Context(),
+		identity.User.ID,
+		identity.User.TimeZone,
+		input,
+	)
+	if err != nil {
+		handler.writeError(response, err)
+		return
+	}
+
+	items := make([]taskResponse, 0, len(listed))
+	for _, value := range listed {
+		item, err := makeTaskResponse(value)
+		if err != nil {
+			handler.writeError(response, err)
+			return
+		}
+		items = append(items, item)
+	}
+	writeJSON(response, http.StatusOK, taskListResponse{Items: items})
+}
+
+func parseTaskListQuery(rawQuery string) (task.ListInput, bool) {
+	query, err := url.ParseQuery(rawQuery)
+	if err != nil || len(query) != 2 {
+		return task.ListInput{}, false
+	}
+	from, fromOK := query["from"]
+	to, toOK := query["to"]
+	if !fromOK || !toOK || len(from) != 1 || len(to) != 1 {
+		return task.ListInput{}, false
+	}
+	return task.ListInput{From: from[0], To: to[0]}, true
 }
 
 func (handler *taskHandler) writeError(response http.ResponseWriter, err error) {

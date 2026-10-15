@@ -2,12 +2,16 @@ package task
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 	"unicode/utf8"
 )
 
-const maximumTitleLength = 200
+const (
+	maximumTitleLength   = 200
+	maximumListRangeDays = 366
+)
 
 // Service applies task rules independently of HTTP and PostgreSQL.
 type Service struct {
@@ -46,6 +50,52 @@ func (service *Service) GetByID(ctx context.Context, userID, taskID string) (Tas
 	}
 
 	return service.repository.FindByID(ctx, userID, taskID)
+}
+
+// List validates a calendar range and returns tasks belonging to the trusted owner.
+func (service *Service) List(ctx context.Context, userID, timeZone string, input ListInput) ([]Task, error) {
+	fromDate, fromErr := ParseCalendarDate(input.From)
+	toDate, toErr := ParseCalendarDate(input.To)
+	fields := make(map[string][]string)
+	if fromErr != nil {
+		fields["from"] = []string{"must be a valid date in YYYY-MM-DD format"}
+	}
+	if toErr != nil {
+		fields["to"] = []string{"must be a valid date in YYYY-MM-DD format"}
+	}
+
+	var fromCalendarTime, toCalendarTime time.Time
+	if len(fields) == 0 {
+		fromCalendarTime = calendarDateTime(fromDate, time.UTC)
+		toCalendarTime = calendarDateTime(toDate, time.UTC)
+		days := int(toCalendarTime.Sub(fromCalendarTime).Hours() / 24)
+		switch {
+		case days <= 0:
+			fields["to"] = []string{"must be after from"}
+		case days > maximumListRangeDays:
+			fields["to"] = []string{"must be no more than 366 days after from"}
+		}
+	}
+	if len(fields) != 0 {
+		return nil, &ValidationError{Fields: fields}
+	}
+
+	location, err := time.LoadLocation(timeZone)
+	if err != nil {
+		return nil, fmt.Errorf("load user time zone: %w", err)
+	}
+
+	return service.repository.ListByRange(ctx, userID, ListRange{
+		FromTime: calendarDateTime(fromDate, location).UTC(),
+		ToTime:   calendarDateTime(toDate, location).UTC(),
+		FromDate: fromDate,
+		ToDate:   toDate,
+		TimeZone: timeZone,
+	})
+}
+
+func calendarDateTime(date CalendarDate, location *time.Location) time.Time {
+	return time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, location)
 }
 
 func isUUID(value string) bool {

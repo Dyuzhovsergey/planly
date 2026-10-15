@@ -62,6 +62,55 @@ func (repository *TaskRepository) FindByID(ctx context.Context, userID, taskID s
 	return result, nil
 }
 
+// ListByRange returns the trusted owner's tasks inside timed and all-day boundaries.
+func (repository *TaskRepository) ListByRange(
+	ctx context.Context,
+	userID string,
+	listRange task.ListRange,
+) ([]task.Task, error) {
+	fromDate, err := calendarDateValue(listRange.FromDate)
+	if err != nil {
+		return nil, err
+	}
+	toDate, err := calendarDateValue(listRange.ToDate)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := repository.pool.Query(ctx, `
+		SELECT id, user_id, title, description, scheduled_at, scheduled_date,
+			completed_at, created_at, updated_at
+		FROM tasks
+		WHERE user_id = $1
+			AND (
+				(scheduled_at >= $2 AND scheduled_at < $3)
+				OR (scheduled_date >= $4 AND scheduled_date < $5)
+			)
+		ORDER BY COALESCE(
+			scheduled_at AT TIME ZONE $6::text,
+			scheduled_date::timestamp
+		), id
+	`, userID, listRange.FromTime, listRange.ToTime, fromDate, toDate, listRange.TimeZone)
+	if err != nil {
+		return nil, fmt.Errorf("list tasks by owner and range: %w", err)
+	}
+	defer rows.Close()
+
+	result := make([]task.Task, 0)
+	for rows.Next() {
+		value, scanErr := scanTask(rows)
+		if scanErr != nil {
+			return nil, fmt.Errorf("scan task in owner range: %w", scanErr)
+		}
+		result = append(result, value)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate tasks in owner range: %w", err)
+	}
+
+	return result, nil
+}
+
 type rowScanner interface {
 	Scan(...any) error
 }
@@ -107,15 +156,23 @@ func taskScheduleValues(schedule task.Schedule) (any, any, error) {
 		return at.UTC(), nil, nil
 	}
 	if date, ok := schedule.Date(); ok {
-		if _, err := task.NewCalendarDate(date.Year(), date.Month(), date.Day()); err != nil {
-			return nil, nil, task.ErrInvalidSchedule
+		value, err := calendarDateValue(date)
+		if err != nil {
+			return nil, nil, err
 		}
-		return nil, pgtype.Date{
-			Time:  time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.UTC),
-			Valid: true,
-		}, nil
+		return nil, value, nil
 	}
 	return nil, nil, task.ErrInvalidSchedule
+}
+
+func calendarDateValue(date task.CalendarDate) (pgtype.Date, error) {
+	if _, err := task.NewCalendarDate(date.Year(), date.Month(), date.Day()); err != nil {
+		return pgtype.Date{}, task.ErrInvalidSchedule
+	}
+	return pgtype.Date{
+		Time:  time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.UTC),
+		Valid: true,
+	}, nil
 }
 
 func taskSchedule(scheduledAt pgtype.Timestamptz, scheduledDate pgtype.Date) (task.Schedule, error) {

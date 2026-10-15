@@ -14,14 +14,19 @@ import (
 )
 
 type fakeTaskService struct {
-	createdUserID string
-	createdInput  task.CreateInput
-	createdTask   task.Task
-	createErr     error
-	foundUserID   string
-	foundTaskID   string
-	foundTask     task.Task
-	findErr       error
+	createdUserID  string
+	createdInput   task.CreateInput
+	createdTask    task.Task
+	createErr      error
+	foundUserID    string
+	foundTaskID    string
+	foundTask      task.Task
+	findErr        error
+	listedUserID   string
+	listedTimeZone string
+	listedInput    task.ListInput
+	listedTasks    []task.Task
+	listErr        error
 }
 
 func (service *fakeTaskService) Create(_ context.Context, userID string, input task.CreateInput) (task.Task, error) {
@@ -34,6 +39,18 @@ func (service *fakeTaskService) GetByID(_ context.Context, userID, taskID string
 	service.foundUserID = userID
 	service.foundTaskID = taskID
 	return service.foundTask, service.findErr
+}
+
+func (service *fakeTaskService) List(
+	_ context.Context,
+	userID string,
+	timeZone string,
+	input task.ListInput,
+) ([]task.Task, error) {
+	service.listedUserID = userID
+	service.listedTimeZone = timeZone
+	service.listedInput = input
+	return service.listedTasks, service.listErr
 }
 
 func TestCreateTaskUsesAuthenticatedOwnerAndReturnsTimedTask(t *testing.T) {
@@ -224,13 +241,156 @@ func TestCreateTaskMapsInternalErrorWithoutDetails(t *testing.T) {
 
 func TestCreateTaskRejectsUnsupportedMethod(t *testing.T) {
 	router := newTestTaskRouter(&fakeTaskService{}, authenticatedTaskService())
-	request := httptest.NewRequest(http.MethodGet, "/api/v1/tasks", nil)
+	request := httptest.NewRequest(http.MethodPut, "/api/v1/tasks", nil)
 	response := httptest.NewRecorder()
 
 	router.ServeHTTP(response, request)
 
 	if response.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusMethodNotAllowed)
+	}
+}
+
+func TestListTasksUsesAuthenticatedOwnerAndTimeZone(t *testing.T) {
+	date, err := task.ParseCalendarDate("2026-10-25")
+	if err != nil {
+		t.Fatalf("ParseCalendarDate() error = %v", err)
+	}
+	createdAt := time.Date(2026, time.October, 14, 9, 0, 0, 0, time.UTC)
+	tasks := &fakeTaskService{listedTasks: []task.Task{
+		{
+			ID:        "timed-task-id",
+			UserID:    "trusted-user-id",
+			Title:     "Timed task",
+			Schedule:  task.NewTimedSchedule(time.Date(2026, time.October, 14, 15, 30, 0, 0, time.UTC)),
+			CreatedAt: createdAt,
+			UpdatedAt: createdAt,
+		},
+		{
+			ID:        "all-day-task-id",
+			UserID:    "trusted-user-id",
+			Title:     "All-day task",
+			Schedule:  task.NewAllDaySchedule(date),
+			CreatedAt: createdAt,
+			UpdatedAt: createdAt,
+		},
+	}}
+	router := newTestTaskRouter(tasks, authenticatedTaskService())
+	request := newListTaskRequest("from=2026-10-01&to=2026-11-01")
+	response := httptest.NewRecorder()
+
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", response.Code, http.StatusOK, response.Body.String())
+	}
+	if tasks.listedUserID != "trusted-user-id" || tasks.listedTimeZone != "Europe/Moscow" {
+		t.Errorf("List() owner/time zone = %q, %q", tasks.listedUserID, tasks.listedTimeZone)
+	}
+	if tasks.listedInput.From != "2026-10-01" || tasks.listedInput.To != "2026-11-01" {
+		t.Errorf("List() input = %+v", tasks.listedInput)
+	}
+	body := response.Body.String()
+	for _, want := range []string{
+		`"items":[`,
+		`"id":"timed-task-id"`,
+		`"at":"2026-10-14T15:30:00Z"`,
+		`"id":"all-day-task-id"`,
+		`"date":"2026-10-25"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body = %s, want %s", body, want)
+		}
+	}
+	if strings.Contains(body, "trusted-user-id") || strings.Contains(body, "userId") {
+		t.Errorf("response leaks owner ID: %s", body)
+	}
+}
+
+func TestListTasksReturnsEmptyArray(t *testing.T) {
+	router := newTestTaskRouter(&fakeTaskService{}, authenticatedTaskService())
+	request := newListTaskRequest("from=2026-10-01&to=2026-11-01")
+	response := httptest.NewRecorder()
+
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK || response.Body.String() != "{\"items\":[]}\n" {
+		t.Fatalf("status = %d; body=%s, want empty items array", response.Code, response.Body.String())
+	}
+}
+
+func TestListTasksRequiresSession(t *testing.T) {
+	tasks := &fakeTaskService{}
+	router := newTestTaskRouter(tasks, &fakeAuthService{})
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/tasks?from=2026-10-01&to=2026-11-01", nil)
+	response := httptest.NewRecorder()
+
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusUnauthorized || !strings.Contains(response.Body.String(), `"code":"authentication_required"`) {
+		t.Fatalf("status = %d; body=%s, want authentication_required", response.Code, response.Body.String())
+	}
+	if tasks.listedUserID != "" {
+		t.Error("List() called without a session")
+	}
+}
+
+func TestListTasksRejectsInvalidQueryShape(t *testing.T) {
+	queries := []string{
+		"to=2026-11-01",
+		"from=2026-10-01",
+		"from=2026-10-01&from=2026-10-02&to=2026-11-01",
+		"from=2026-10-01&to=2026-11-01&userId=attacker",
+		"from=%zz&to=2026-11-01",
+	}
+
+	for _, query := range queries {
+		t.Run(query, func(t *testing.T) {
+			tasks := &fakeTaskService{}
+			router := newTestTaskRouter(tasks, authenticatedTaskService())
+			request := newListTaskRequest(query)
+			response := httptest.NewRecorder()
+
+			router.ServeHTTP(response, request)
+
+			if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), `"code":"invalid_request"`) {
+				t.Fatalf("status = %d; body=%s, want invalid_request", response.Code, response.Body.String())
+			}
+			if tasks.listedUserID != "" {
+				t.Error("List() called after invalid query")
+			}
+		})
+	}
+}
+
+func TestListTasksMapsValidationError(t *testing.T) {
+	tasks := &fakeTaskService{listErr: &task.ValidationError{Fields: map[string][]string{
+		"to": {"must be after from"},
+	}}}
+	router := newTestTaskRouter(tasks, authenticatedTaskService())
+	request := newListTaskRequest("from=2026-11-01&to=2026-10-01")
+	response := httptest.NewRecorder()
+
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusUnprocessableEntity || !strings.Contains(response.Body.String(), `"code":"validation_failed"`) {
+		t.Fatalf("status = %d; body=%s, want validation_failed", response.Code, response.Body.String())
+	}
+}
+
+func TestListTasksMapsInternalErrorWithoutDetails(t *testing.T) {
+	tasks := &fakeTaskService{listErr: errors.New("database details")}
+	router := newTestTaskRouter(tasks, authenticatedTaskService())
+	request := newListTaskRequest("from=2026-10-01&to=2026-11-01")
+	response := httptest.NewRecorder()
+
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusInternalServerError)
+	}
+	if strings.Contains(response.Body.String(), "database details") {
+		t.Errorf("body leaks internal error: %s", response.Body.String())
 	}
 }
 
@@ -366,7 +526,7 @@ func TestGetTaskMapsInternalErrorWithoutDetails(t *testing.T) {
 
 func authenticatedTaskService() *fakeAuthService {
 	return &fakeAuthService{identity: auth.SessionIdentity{
-		User:      auth.User{ID: "trusted-user-id"},
+		User:      auth.User{ID: "trusted-user-id", TimeZone: "Europe/Moscow"},
 		CSRFToken: "csrf-token",
 	}}
 }
@@ -393,6 +553,13 @@ func newCreateTaskRequest(body string) *http.Request {
 
 func newGetTaskRequest(taskID string) *http.Request {
 	request := httptest.NewRequest(http.MethodGet, "/api/v1/tasks/"+taskID, nil)
+	request.AddCookie(&http.Cookie{Name: localSessionCookie, Value: "session-token"})
+	return request
+}
+
+func newListTaskRequest(query string) *http.Request {
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/tasks", nil)
+	request.URL.RawQuery = query
 	request.AddCookie(&http.Cookie{Name: localSessionCookie, Value: "session-token"})
 	return request
 }

@@ -96,7 +96,162 @@ func TestTaskRepositoryIntegration(t *testing.T) {
 		t.Fatalf("Create() invalid all-day date error = %v, want ErrInvalidSchedule", err)
 	}
 
+	assertTaskRangeListing(t, ctx, repository, ownerID, otherUserID, timedTask, allDayTask)
 	assertTaskScheduleConstraint(t, ctx, pool, ownerID)
+	assertTaskRangeIndexes(t, ctx, pool)
+}
+
+func assertTaskRangeListing(
+	t *testing.T,
+	ctx context.Context,
+	repository *TaskRepository,
+	ownerID string,
+	otherUserID string,
+	timedTask task.Task,
+	allDayTask task.Task,
+) {
+	t.Helper()
+
+	location, err := time.LoadLocation("Europe/Moscow")
+	if err != nil {
+		t.Fatalf("LoadLocation() error = %v", err)
+	}
+	fromDate := mustTaskCalendarDate(t, "2026-10-01")
+	toDate := mustTaskCalendarDate(t, "2026-11-01")
+
+	fromAllDay, err := repository.Create(ctx, ownerID, task.CreateParams{
+		Title:    "Range start all-day",
+		Schedule: task.NewAllDaySchedule(fromDate),
+	})
+	if err != nil {
+		t.Fatalf("Create() range-start all-day error = %v", err)
+	}
+	fromTimed, err := repository.Create(ctx, ownerID, task.CreateParams{
+		Title:    "Range start timed",
+		Schedule: task.NewTimedSchedule(time.Date(2026, time.October, 1, 0, 30, 0, 0, location)),
+	})
+	if err != nil {
+		t.Fatalf("Create() range-start timed error = %v", err)
+	}
+	if _, err := repository.Create(ctx, ownerID, task.CreateParams{
+		Title:    "Range end timed",
+		Schedule: task.NewTimedSchedule(time.Date(2026, time.November, 1, 0, 0, 0, 0, location)),
+	}); err != nil {
+		t.Fatalf("Create() range-end timed error = %v", err)
+	}
+	if _, err := repository.Create(ctx, ownerID, task.CreateParams{
+		Title:    "Range end all-day",
+		Schedule: task.NewAllDaySchedule(toDate),
+	}); err != nil {
+		t.Fatalf("Create() range-end all-day error = %v", err)
+	}
+	if _, err := repository.Create(ctx, otherUserID, task.CreateParams{
+		Title:    "Foreign task",
+		Schedule: task.NewTimedSchedule(time.Date(2026, time.October, 15, 12, 0, 0, 0, location)),
+	}); err != nil {
+		t.Fatalf("Create() foreign task error = %v", err)
+	}
+
+	listed, err := repository.ListByRange(ctx, ownerID, task.ListRange{
+		FromTime: time.Date(2026, time.October, 1, 0, 0, 0, 0, location).UTC(),
+		ToTime:   time.Date(2026, time.November, 1, 0, 0, 0, 0, location).UTC(),
+		FromDate: fromDate,
+		ToDate:   toDate,
+		TimeZone: "Europe/Moscow",
+	})
+	if err != nil {
+		t.Fatalf("ListByRange() error = %v", err)
+	}
+	wantIDs := []string{fromAllDay.ID, fromTimed.ID, timedTask.ID, allDayTask.ID}
+	if len(listed) != len(wantIDs) {
+		t.Fatalf("ListByRange() returned %d tasks, want %d: %+v", len(listed), len(wantIDs), listed)
+	}
+	for index, wantID := range wantIDs {
+		if listed[index].ID != wantID {
+			t.Errorf("ListByRange()[%d].ID = %q, want %q", index, listed[index].ID, wantID)
+		}
+		if listed[index].UserID != ownerID {
+			t.Errorf("ListByRange()[%d].UserID = %q, want owner %q", index, listed[index].UserID, ownerID)
+		}
+	}
+
+	assertTaskRangeLocalTimeOrdering(t, ctx, repository, ownerID, allDayTask)
+
+	emptyFrom := mustTaskCalendarDate(t, "2026-12-01")
+	emptyTo := mustTaskCalendarDate(t, "2026-12-02")
+	empty, err := repository.ListByRange(ctx, ownerID, task.ListRange{
+		FromTime: time.Date(2026, time.December, 1, 0, 0, 0, 0, location).UTC(),
+		ToTime:   time.Date(2026, time.December, 2, 0, 0, 0, 0, location).UTC(),
+		FromDate: emptyFrom,
+		ToDate:   emptyTo,
+		TimeZone: "Europe/Moscow",
+	})
+	if err != nil {
+		t.Fatalf("ListByRange() empty error = %v", err)
+	}
+	if empty == nil || len(empty) != 0 {
+		t.Fatalf("ListByRange() empty = %#v, want non-nil empty slice", empty)
+	}
+}
+
+func assertTaskRangeLocalTimeOrdering(
+	t *testing.T,
+	ctx context.Context,
+	repository *TaskRepository,
+	ownerID string,
+	allDayTask task.Task,
+) {
+	t.Helper()
+
+	firstByLocalTime, err := repository.Create(ctx, ownerID, task.CreateParams{
+		Title:    "First by local time after DST fallback",
+		Schedule: task.NewTimedSchedule(time.Date(2026, time.October, 25, 1, 15, 0, 0, time.UTC)),
+	})
+	if err != nil {
+		t.Fatalf("Create() first local-time task error = %v", err)
+	}
+	secondByLocalTime, err := repository.Create(ctx, ownerID, task.CreateParams{
+		Title:    "Second by local time before DST fallback",
+		Schedule: task.NewTimedSchedule(time.Date(2026, time.October, 25, 0, 30, 0, 0, time.UTC)),
+	})
+	if err != nil {
+		t.Fatalf("Create() second local-time task error = %v", err)
+	}
+
+	fromDate := mustTaskCalendarDate(t, "2026-10-25")
+	toDate := mustTaskCalendarDate(t, "2026-10-26")
+	berlin, err := time.LoadLocation("Europe/Berlin")
+	if err != nil {
+		t.Fatalf("LoadLocation() error = %v", err)
+	}
+	listed, err := repository.ListByRange(ctx, ownerID, task.ListRange{
+		FromTime: time.Date(2026, time.October, 25, 0, 0, 0, 0, berlin).UTC(),
+		ToTime:   time.Date(2026, time.October, 26, 0, 0, 0, 0, berlin).UTC(),
+		FromDate: fromDate,
+		ToDate:   toDate,
+		TimeZone: "Europe/Berlin",
+	})
+	if err != nil {
+		t.Fatalf("ListByRange() DST ordering error = %v", err)
+	}
+	wantIDs := []string{allDayTask.ID, firstByLocalTime.ID, secondByLocalTime.ID}
+	if len(listed) != len(wantIDs) {
+		t.Fatalf("ListByRange() DST ordering returned %d tasks, want %d: %+v", len(listed), len(wantIDs), listed)
+	}
+	for index, wantID := range wantIDs {
+		if listed[index].ID != wantID {
+			t.Errorf("ListByRange() DST ordering [%d].ID = %q, want %q", index, listed[index].ID, wantID)
+		}
+	}
+}
+
+func mustTaskCalendarDate(t *testing.T, value string) task.CalendarDate {
+	t.Helper()
+	date, err := task.ParseCalendarDate(value)
+	if err != nil {
+		t.Fatalf("ParseCalendarDate(%q) error = %v", value, err)
+	}
+	return date
 }
 
 func insertTaskTestUser(t *testing.T, ctx context.Context, pool *pgxpool.Pool, email string) string {
@@ -139,6 +294,20 @@ func assertTaskScheduleConstraint(t *testing.T, ctx context.Context, pool *pgxpo
 	`, userID)
 	if !isCheckViolation(err) {
 		t.Fatalf("insert with two schedules error = %v, want check violation", err)
+	}
+}
+
+func assertTaskRangeIndexes(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
+	t.Helper()
+
+	for _, name := range []string{"tasks_user_scheduled_at_idx", "tasks_user_scheduled_date_idx"} {
+		var exists bool
+		if err := pool.QueryRow(ctx, `SELECT to_regclass($1) IS NOT NULL`, name).Scan(&exists); err != nil {
+			t.Fatalf("check index %s: %v", name, err)
+		}
+		if !exists {
+			t.Errorf("index %s does not exist", name)
+		}
 	}
 }
 

@@ -38,6 +38,10 @@ func NewRouter(dependencies Dependencies) http.Handler {
 		if dependencies.Tasks != nil {
 			tasks := newTaskHandler(dependencies.Tasks)
 			router.Handle(
+				"GET /api/v1/tasks",
+				auth.requireSession(http.HandlerFunc(tasks.list)),
+			)
+			router.Handle(
 				"GET /api/v1/tasks/{id}",
 				auth.requireSession(http.HandlerFunc(tasks.getByID)),
 			)

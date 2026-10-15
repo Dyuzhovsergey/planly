@@ -31,6 +31,12 @@ type CreateScheduleInput struct {
 	Date string
 }
 
+// ListInput contains untrusted calendar boundaries from a task list request.
+type ListInput struct {
+	From string
+	To   string
+}
+
 // CalendarDate is a date without a time of day or time zone.
 type CalendarDate struct {
 	year  int

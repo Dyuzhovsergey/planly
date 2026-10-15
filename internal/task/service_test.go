@@ -17,6 +17,10 @@ type fakeRepository struct {
 	foundTaskID   string
 	foundTask     Task
 	findErr       error
+	listedUserID  string
+	listedRange   ListRange
+	listedTasks   []Task
+	listErr       error
 }
 
 func (repository *fakeRepository) Create(_ context.Context, userID string, params CreateParams) (Task, error) {
@@ -29,6 +33,12 @@ func (repository *fakeRepository) FindByID(_ context.Context, userID, taskID str
 	repository.foundUserID = userID
 	repository.foundTaskID = taskID
 	return repository.foundTask, repository.findErr
+}
+
+func (repository *fakeRepository) ListByRange(_ context.Context, userID string, listRange ListRange) ([]Task, error) {
+	repository.listedUserID = userID
+	repository.listedRange = listRange
+	return repository.listedTasks, repository.listErr
 }
 
 func TestServiceCreateNormalizesTimedTaskAndUsesTrustedOwner(t *testing.T) {
@@ -182,6 +192,133 @@ func TestServiceGetByIDPropagatesRepositoryError(t *testing.T) {
 	_, err := service.GetByID(context.Background(), "trusted-user-id", "0199c471-a941-7b29-87af-59c00893d91c")
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("GetByID() error = %v, want %v", err, wantErr)
+	}
+}
+
+func TestServiceListConvertsCalendarBoundariesAcrossDST(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    ListInput
+		wantFrom string
+		wantTo   string
+	}{
+		{
+			name:     "spring transition is 23 hours",
+			input:    ListInput{From: "2026-03-29", To: "2026-03-30"},
+			wantFrom: "2026-03-28T23:00:00Z",
+			wantTo:   "2026-03-29T22:00:00Z",
+		},
+		{
+			name:     "autumn transition is 25 hours",
+			input:    ListInput{From: "2026-10-25", To: "2026-10-26"},
+			wantFrom: "2026-10-24T22:00:00Z",
+			wantTo:   "2026-10-25T23:00:00Z",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			repository := &fakeRepository{listedTasks: []Task{{ID: "task-id"}}}
+			service := NewService(repository)
+
+			listed, err := service.List(context.Background(), "trusted-user-id", "Europe/Berlin", test.input)
+			if err != nil {
+				t.Fatalf("List() error = %v", err)
+			}
+			if len(listed) != 1 || listed[0].ID != "task-id" {
+				t.Fatalf("List() = %+v, want task-id", listed)
+			}
+			if repository.listedUserID != "trusted-user-id" || repository.listedRange.TimeZone != "Europe/Berlin" {
+				t.Errorf("ListByRange() owner/time zone = %q, %q", repository.listedUserID, repository.listedRange.TimeZone)
+			}
+			if got := repository.listedRange.FromTime.Format(time.RFC3339); got != test.wantFrom {
+				t.Errorf("from time = %s, want %s", got, test.wantFrom)
+			}
+			if got := repository.listedRange.ToTime.Format(time.RFC3339); got != test.wantTo {
+				t.Errorf("to time = %s, want %s", got, test.wantTo)
+			}
+			if repository.listedRange.FromDate.String() != test.input.From || repository.listedRange.ToDate.String() != test.input.To {
+				t.Errorf("date range = %s..%s, want %s..%s", repository.listedRange.FromDate, repository.listedRange.ToDate, test.input.From, test.input.To)
+			}
+		})
+	}
+}
+
+func TestServiceListValidatesCalendarRange(t *testing.T) {
+	tests := []struct {
+		name      string
+		input     ListInput
+		wantField string
+	}{
+		{name: "invalid from", input: ListInput{From: "2026-02-30", To: "2026-03-01"}, wantField: "from"},
+		{name: "invalid to", input: ListInput{From: "2026-03-01", To: "tomorrow"}, wantField: "to"},
+		{name: "equal boundaries", input: ListInput{From: "2026-03-01", To: "2026-03-01"}, wantField: "to"},
+		{name: "reversed boundaries", input: ListInput{From: "2026-03-02", To: "2026-03-01"}, wantField: "to"},
+		{name: "more than 366 days", input: ListInput{From: "2026-01-01", To: "2027-01-03"}, wantField: "to"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			repository := &fakeRepository{}
+			service := NewService(repository)
+
+			_, err := service.List(context.Background(), "trusted-user-id", "Europe/Moscow", test.input)
+			var validationErr *ValidationError
+			if !errors.As(err, &validationErr) {
+				t.Fatalf("List() error = %v, want ValidationError", err)
+			}
+			if len(validationErr.Fields[test.wantField]) == 0 {
+				t.Errorf("validation fields = %v, want %q", validationErr.Fields, test.wantField)
+			}
+			if repository.listedUserID != "" {
+				t.Error("ListByRange() called after invalid input")
+			}
+		})
+	}
+}
+
+func TestServiceListAllowsMaximumRange(t *testing.T) {
+	repository := &fakeRepository{}
+	service := NewService(repository)
+
+	_, err := service.List(context.Background(), "trusted-user-id", "UTC", ListInput{
+		From: "2024-01-01",
+		To:   "2025-01-01",
+	})
+	if err != nil {
+		t.Fatalf("List() error = %v, want 366-day range to be valid", err)
+	}
+	if repository.listedUserID != "trusted-user-id" {
+		t.Errorf("ListByRange() user ID = %q, want trusted-user-id", repository.listedUserID)
+	}
+}
+
+func TestServiceListRejectsInvalidTrustedTimeZone(t *testing.T) {
+	repository := &fakeRepository{}
+	service := NewService(repository)
+
+	_, err := service.List(context.Background(), "trusted-user-id", "Not/A_Time_Zone", ListInput{
+		From: "2026-10-01",
+		To:   "2026-11-01",
+	})
+	if err == nil || !strings.Contains(err.Error(), "load user time zone") {
+		t.Fatalf("List() error = %v, want time zone error", err)
+	}
+	if repository.listedUserID != "" {
+		t.Error("ListByRange() called with an invalid time zone")
+	}
+}
+
+func TestServiceListPropagatesRepositoryError(t *testing.T) {
+	wantErr := errors.New("database unavailable")
+	service := NewService(&fakeRepository{listErr: wantErr})
+
+	_, err := service.List(context.Background(), "trusted-user-id", "Europe/Moscow", ListInput{
+		From: "2026-10-01",
+		To:   "2026-11-01",
+	})
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("List() error = %v, want %v", err, wantErr)
 	}
 }
 
