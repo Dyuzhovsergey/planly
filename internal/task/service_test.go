@@ -22,6 +22,9 @@ type fakeRepository struct {
 	updatedParams UpdateParams
 	updatedTask   Task
 	updateErr     error
+	deletedUserID string
+	deletedTaskID string
+	deleteErr     error
 	listedUserID  string
 	listedRange   ListRange
 	listedTasks   []Task
@@ -45,6 +48,12 @@ func (repository *fakeRepository) Update(_ context.Context, userID, taskID strin
 	repository.updatedTaskID = taskID
 	repository.updatedParams = params
 	return repository.updatedTask, repository.updateErr
+}
+
+func (repository *fakeRepository) Delete(_ context.Context, userID, taskID string) error {
+	repository.deletedUserID = userID
+	repository.deletedTaskID = taskID
+	return repository.deleteErr
 }
 
 func (repository *fakeRepository) ListByRange(_ context.Context, userID string, listRange ListRange) ([]Task, error) {
@@ -343,6 +352,42 @@ func TestServiceUpdatePropagatesRepositoryError(t *testing.T) {
 	_, err := service.Update(context.Background(), "trusted-user-id", "0199c471-a941-7b29-87af-59c00893d91c", UpdateInput{Title: &title})
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("Update() error = %v, want %v", err, wantErr)
+	}
+}
+
+func TestServiceDeleteUsesTrustedOwner(t *testing.T) {
+	const taskID = "0199c471-a941-7b29-87af-59c00893d91c"
+	repository := &fakeRepository{}
+	service := NewService(repository)
+
+	if err := service.Delete(context.Background(), "trusted-user-id", taskID); err != nil {
+		t.Fatalf("Delete() error = %v", err)
+	}
+	if repository.deletedUserID != "trusted-user-id" || repository.deletedTaskID != taskID {
+		t.Errorf("repository Delete() arguments = %q, %q, want trusted owner and task ID", repository.deletedUserID, repository.deletedTaskID)
+	}
+}
+
+func TestServiceDeleteRejectsInvalidIDAsNotFound(t *testing.T) {
+	repository := &fakeRepository{}
+	service := NewService(repository)
+
+	err := service.Delete(context.Background(), "trusted-user-id", "not-a-uuid")
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("Delete() error = %v, want ErrNotFound", err)
+	}
+	if repository.deletedUserID != "" || repository.deletedTaskID != "" {
+		t.Error("repository Delete() called for invalid task ID")
+	}
+}
+
+func TestServiceDeletePropagatesRepositoryError(t *testing.T) {
+	wantErr := errors.New("database unavailable")
+	service := NewService(&fakeRepository{deleteErr: wantErr})
+
+	err := service.Delete(context.Background(), "trusted-user-id", "0199c471-a941-7b29-87af-59c00893d91c")
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("Delete() error = %v, want %v", err, wantErr)
 	}
 }
 

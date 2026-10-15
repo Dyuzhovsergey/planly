@@ -46,6 +46,8 @@ type Repository interface {
 	FindByID(ctx context.Context, userID, taskID string) (Task, error)
 	// Update changes a task only when it belongs to the trusted owner.
 	Update(ctx context.Context, userID, taskID string, params UpdateParams) (Task, error)
+	// Delete permanently removes a task only when it belongs to the trusted owner.
+	Delete(ctx context.Context, userID, taskID string) error
 	// ListByRange returns tasks belonging to the trusted owner within a calendar range.
 	ListByRange(ctx context.Context, userID string, listRange ListRange) ([]Task, error)
 }

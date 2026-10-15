@@ -4,10 +4,10 @@
 
 ## Текущий статус
 
-- Стадия: защищённое завершение и повторное открытие задачи принято пользователем.
-- Завершённые инкременты: MVP-контракт; Go HTTP-сервер с `GET /health`; PostgreSQL 18.6, миграция `users` и `GET /ready`; Auth foundation; session authentication и `GET /api/v1/me`; изменение часовой зоны через `PATCH /api/v1/me`; Task storage foundation; Task creation API; Task retrieval API; Task list API; Task update API; Task completion API.
-- Текущий инкремент: отсутствует; Task delete API предложен для отдельного согласования.
-- Следующее действие: согласовать `DELETE /api/v1/tasks/{id}` с Origin, session, CSRF, доверенным `user_id` и одинаковым `404 task_not_found`.
+- Стадия: защищённый backend CRUD задач принят пользователем.
+- Завершённые инкременты: MVP-контракт; Go HTTP-сервер с `GET /health`; PostgreSQL 18.6, миграция `users` и `GET /ready`; Auth foundation; session authentication и `GET /api/v1/me`; изменение часовой зоны через `PATCH /api/v1/me`; Task storage foundation; Task creation API; Task retrieval API; Task list API; Task update API; Task completion API; Task delete API.
+- Текущий инкремент: отсутствует; Frontend foundation предложен для отдельного согласования.
+- Следующее действие: согласовать каркас React + TypeScript + Vite, API client и восстановление текущего пользователя через `GET /api/v1/me`.
 
 ## Предварительная последовательность
 
@@ -15,7 +15,7 @@
 - [x] Создать каркас Go-сервера с `/health` и тестом.
 - [x] Подключить PostgreSQL и базовые миграции; добавить `/ready` с проверкой доступности БД.
 - [x] Реализовать пользователей и аутентификацию (Auth foundation, session authentication, `GET /me` и `PATCH /me` приняты).
-- [ ] Реализовать защищённое хранилище задач и обязательную серверную изоляцию пользовательских данных (storage, создание, получение, список, изменение и завершение приняты; удаление ещё не реализовано).
+- [x] Реализовать защищённое хранилище задач и обязательную серверную изоляцию пользовательских данных (storage, создание, получение, список, изменение, завершение и удаление приняты пользователем).
 - [ ] Создать React + TypeScript + Vite UI с Tailwind CSS + shadcn/ui.
 - [ ] Выбрать библиотеку календаря, реализовать виды месяц / неделя / день.
 - [ ] Дополнить Docker Compose контейнерами приложения и настроить безопасное веб-развёртывание.
@@ -219,3 +219,17 @@
 **Проверка и критерии готовности:** unit- и HTTP-тесты проверяют `true`, явный `false`, отсутствие поля, `null`, совместное обновление и существующую защиту. Integration-тест проверяет оба перехода, сохранение временных меток при повторных запросах, совместное обновление и изоляцию владельцев. Требуются успешные integration-, race- и стандартные Go-проверки, Compose и ручные PATCH-запросы.
 
 **Статус:** принят пользователем после ручной проверки завершения, повторного завершения без изменения `completedAt` и `updatedAt`, повторного открытия и совместного изменения статуса с другими полями.
+
+### Task delete API
+
+**Цель и зачем сейчас:** завершить основной CRUD задач после принятых create/get/list/update/completion use cases, сохранив серверную изоляцию владельцев.
+
+**Результат и границы задачи:** добавлен `DELETE /api/v1/tasks/{id}` с физическим удалением и ответом `204 No Content` без тела. Пагинация и frontend не добавлялись; новые зависимости и миграции не потребовались.
+
+**Файлы:** `internal/task/`; `internal/platform/postgres/task_repository.go` и integration-тест; `internal/httpapi/task.go`, router и HTTP-тесты; `README.md`, `docs/ARCHITECTURE.md`, `docs/API.md`, `docs/DEVELOPMENT_PLAN.md`.
+
+**Архитектурные решения:** endpoint проходит Origin → session → CSRF, handler получает `user_id` только из session identity, service преобразует неверный UUID в `ErrNotFound` до обращения к БД, а repository выполняет один `DELETE ... WHERE user_id = $1 AND id = $2`. Ноль затронутых строк одинаково скрывает чужую, отсутствующую и повторно удалённую задачу.
+
+**Проверка и критерии готовности:** unit-тесты проверяют доверенного владельца, UUID и ошибки repository; HTTP-тесты покрывают `204` без тела, Origin/session/CSRF, единый `404` и безопасный `500`; integration-тест проверяет физическое удаление, сохранность после чужой попытки и повторный `ErrNotFound`. Требуются успешные integration-, race- и стандартные Go-проверки, Compose и ручные DELETE-запросы.
+
+**Статус:** принят пользователем после ручной проверки `204 No Content` без тела, последующего и повторного `404 task_not_found` и отказа при неверном CSRF-токене.

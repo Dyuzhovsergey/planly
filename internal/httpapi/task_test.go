@@ -27,6 +27,9 @@ type fakeTaskService struct {
 	updatedInput   task.UpdateInput
 	updatedTask    task.Task
 	updateErr      error
+	deletedUserID  string
+	deletedTaskID  string
+	deleteErr      error
 	listedUserID   string
 	listedTimeZone string
 	listedInput    task.ListInput
@@ -51,6 +54,12 @@ func (service *fakeTaskService) Update(_ context.Context, userID, taskID string,
 	service.updatedTaskID = taskID
 	service.updatedInput = input
 	return service.updatedTask, service.updateErr
+}
+
+func (service *fakeTaskService) Delete(_ context.Context, userID, taskID string) error {
+	service.deletedUserID = userID
+	service.deletedTaskID = taskID
+	return service.deleteErr
 }
 
 func (service *fakeTaskService) List(
@@ -675,6 +684,133 @@ func TestUpdateTaskMapsInternalErrorWithoutDetails(t *testing.T) {
 	}
 }
 
+func TestDeleteTaskUsesAuthenticatedOwnerAndReturnsNoContent(t *testing.T) {
+	const taskID = "0199c471-a941-7b29-87af-59c00893d91c"
+	tasks := &fakeTaskService{}
+	router := newTestTaskRouter(tasks, authenticatedTaskService())
+	request := newDeleteTaskRequest(taskID)
+	response := httptest.NewRecorder()
+
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d; body=%s", response.Code, http.StatusNoContent, response.Body.String())
+	}
+	if tasks.deletedUserID != "trusted-user-id" || tasks.deletedTaskID != taskID {
+		t.Errorf("Delete() owner/task ID = %q, %q, want trusted owner and task ID", tasks.deletedUserID, tasks.deletedTaskID)
+	}
+	if response.Body.Len() != 0 {
+		t.Errorf("body = %q, want empty", response.Body.String())
+	}
+	if contentType := response.Header().Get("Content-Type"); contentType != "" {
+		t.Errorf("Content-Type = %q, want empty", contentType)
+	}
+}
+
+func TestDeleteTaskRejectsWrongOriginBeforeAuthentication(t *testing.T) {
+	authService := authenticatedTaskService()
+	tasks := &fakeTaskService{}
+	router := newTestTaskRouter(tasks, authService)
+	request := newDeleteTaskRequest("0199c471-a941-7b29-87af-59c00893d91c")
+	request.Header.Set("Origin", "https://attacker.example")
+	response := httptest.NewRecorder()
+
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusForbidden || !strings.Contains(response.Body.String(), `"code":"origin_not_allowed"`) {
+		t.Fatalf("status = %d; body=%s, want origin_not_allowed", response.Code, response.Body.String())
+	}
+	if authService.authenticatedToken != "" || tasks.deletedUserID != "" {
+		t.Error("request continued after rejected Origin")
+	}
+}
+
+func TestDeleteTaskRequiresSession(t *testing.T) {
+	tasks := &fakeTaskService{}
+	router := newTestTaskRouter(tasks, &fakeAuthService{})
+	request := newDeleteTaskRequest("0199c471-a941-7b29-87af-59c00893d91c")
+	request.Header.Del("Cookie")
+	response := httptest.NewRecorder()
+
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusUnauthorized || !strings.Contains(response.Body.String(), `"code":"authentication_required"`) {
+		t.Fatalf("status = %d; body=%s, want authentication_required", response.Code, response.Body.String())
+	}
+	if tasks.deletedUserID != "" {
+		t.Error("Delete() called without a session")
+	}
+}
+
+func TestDeleteTaskRequiresValidCSRF(t *testing.T) {
+	for _, token := range []string{"", "wrong-token"} {
+		t.Run(token, func(t *testing.T) {
+			tasks := &fakeTaskService{}
+			router := newTestTaskRouter(tasks, authenticatedTaskService())
+			request := newDeleteTaskRequest("0199c471-a941-7b29-87af-59c00893d91c")
+			request.Header.Set("X-CSRF-Token", token)
+			response := httptest.NewRecorder()
+
+			router.ServeHTTP(response, request)
+
+			if response.Code != http.StatusForbidden || !strings.Contains(response.Body.String(), `"code":"csrf_failed"`) {
+				t.Fatalf("status = %d; body=%s, want csrf_failed", response.Code, response.Body.String())
+			}
+			if tasks.deletedUserID != "" {
+				t.Error("Delete() called after rejected CSRF")
+			}
+		})
+	}
+}
+
+func TestDeleteTaskMapsNotFoundIdentically(t *testing.T) {
+	var bodies []string
+	for _, test := range []struct {
+		name   string
+		taskID string
+	}{
+		{name: "missing", taskID: "0199c471-a941-7b29-87af-59c00893d91c"},
+		{name: "foreign", taskID: "0199c471-a941-7b29-87af-59c00893d91c"},
+		{name: "already deleted", taskID: "0199c471-a941-7b29-87af-59c00893d91c"},
+		{name: "invalid ID", taskID: "not-a-uuid"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			tasks := &fakeTaskService{deleteErr: task.ErrNotFound}
+			router := newTestTaskRouter(tasks, authenticatedTaskService())
+			request := newDeleteTaskRequest(test.taskID)
+			response := httptest.NewRecorder()
+
+			router.ServeHTTP(response, request)
+
+			if response.Code != http.StatusNotFound || !strings.Contains(response.Body.String(), `"code":"task_not_found"`) {
+				t.Fatalf("status = %d; body=%s, want task_not_found", response.Code, response.Body.String())
+			}
+			bodies = append(bodies, response.Body.String())
+		})
+	}
+	for index := 1; index < len(bodies); index++ {
+		if bodies[index] != bodies[0] {
+			t.Errorf("not-found responses differ: %q != %q", bodies[index], bodies[0])
+		}
+	}
+}
+
+func TestDeleteTaskMapsInternalErrorWithoutDetails(t *testing.T) {
+	tasks := &fakeTaskService{deleteErr: errors.New("database details")}
+	router := newTestTaskRouter(tasks, authenticatedTaskService())
+	request := newDeleteTaskRequest("0199c471-a941-7b29-87af-59c00893d91c")
+	response := httptest.NewRecorder()
+
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusInternalServerError)
+	}
+	if strings.Contains(response.Body.String(), "database details") {
+		t.Errorf("body leaks internal error: %s", response.Body.String())
+	}
+}
+
 func TestGetTaskUsesAuthenticatedOwnerAndReturnsPublicTask(t *testing.T) {
 	const taskID = "0199c471-a941-7b29-87af-59c00893d91c"
 	createdAt := time.Date(2026, time.October, 14, 9, 0, 0, 0, time.UTC)
@@ -843,6 +979,14 @@ func newUpdateTaskRequest(taskID, body string) *http.Request {
 	request.Header.Set("Origin", testOrigin)
 	request.Header.Set("X-CSRF-Token", "csrf-token")
 	request.Header.Set("Content-Type", "application/json")
+	request.AddCookie(&http.Cookie{Name: localSessionCookie, Value: "session-token"})
+	return request
+}
+
+func newDeleteTaskRequest(taskID string) *http.Request {
+	request := httptest.NewRequest(http.MethodDelete, "/api/v1/tasks/"+taskID, nil)
+	request.Header.Set("Origin", testOrigin)
+	request.Header.Set("X-CSRF-Token", "csrf-token")
 	request.AddCookie(&http.Cookie{Name: localSessionCookie, Value: "session-token"})
 	return request
 }

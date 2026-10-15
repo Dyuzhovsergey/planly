@@ -113,6 +113,21 @@ func (repository *TaskRepository) Update(
 	return result, nil
 }
 
+// Delete permanently removes a task only when it belongs to the trusted owner.
+func (repository *TaskRepository) Delete(ctx context.Context, userID, taskID string) error {
+	commandTag, err := repository.pool.Exec(ctx, `
+		DELETE FROM tasks
+		WHERE user_id = $1 AND id = $2
+	`, userID, taskID)
+	if err != nil {
+		return fmt.Errorf("delete task by owner and ID: %w", err)
+	}
+	if commandTag.RowsAffected() == 0 {
+		return task.ErrNotFound
+	}
+	return nil
+}
+
 // ListByRange returns the trusted owner's tasks inside timed and all-day boundaries.
 func (repository *TaskRepository) ListByRange(
 	ctx context.Context,

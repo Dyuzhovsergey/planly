@@ -98,6 +98,7 @@ func TestTaskRepositoryIntegration(t *testing.T) {
 
 	assertTaskRangeListing(t, ctx, repository, ownerID, otherUserID, timedTask, allDayTask)
 	assertTaskUpdate(t, ctx, repository, ownerID, otherUserID)
+	assertTaskDelete(t, ctx, repository, ownerID, otherUserID)
 	assertTaskScheduleConstraint(t, ctx, pool, ownerID)
 	assertTaskRangeIndexes(t, ctx, pool)
 }
@@ -251,6 +252,44 @@ func assertTaskUpdate(
 	}
 	if _, err := repository.Update(ctx, ownerID, original.ID, task.UpdateParams{Schedule: &task.Schedule{}}); !errors.Is(err, task.ErrInvalidSchedule) {
 		t.Fatalf("Update() invalid schedule error = %v, want ErrInvalidSchedule", err)
+	}
+}
+
+func assertTaskDelete(
+	t *testing.T,
+	ctx context.Context,
+	repository *TaskRepository,
+	ownerID string,
+	otherUserID string,
+) {
+	t.Helper()
+
+	fixture, err := repository.Create(ctx, ownerID, task.CreateParams{
+		Title:    "Delete fixture",
+		Schedule: task.NewTimedSchedule(time.Date(2027, time.February, 1, 10, 0, 0, 0, time.UTC)),
+	})
+	if err != nil {
+		t.Fatalf("Create() delete fixture error = %v", err)
+	}
+
+	if err := repository.Delete(ctx, otherUserID, fixture.ID); !errors.Is(err, task.ErrNotFound) {
+		t.Fatalf("Delete() foreign owner error = %v, want ErrNotFound", err)
+	}
+	if _, err := repository.FindByID(ctx, ownerID, fixture.ID); err != nil {
+		t.Fatalf("FindByID() after foreign delete error = %v, want task preserved", err)
+	}
+
+	if err := repository.Delete(ctx, ownerID, fixture.ID); err != nil {
+		t.Fatalf("Delete() owner error = %v", err)
+	}
+	if _, err := repository.FindByID(ctx, ownerID, fixture.ID); !errors.Is(err, task.ErrNotFound) {
+		t.Fatalf("FindByID() after owner delete error = %v, want ErrNotFound", err)
+	}
+	if err := repository.Delete(ctx, ownerID, fixture.ID); !errors.Is(err, task.ErrNotFound) {
+		t.Fatalf("Delete() repeated error = %v, want ErrNotFound", err)
+	}
+	if err := repository.Delete(ctx, ownerID, "00000000-0000-0000-0000-000000000000"); !errors.Is(err, task.ErrNotFound) {
+		t.Fatalf("Delete() missing task error = %v, want ErrNotFound", err)
 	}
 }
 

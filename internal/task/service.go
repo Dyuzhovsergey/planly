@@ -91,6 +91,15 @@ func (service *Service) Update(ctx context.Context, userID, taskID string, input
 	return service.repository.Update(ctx, userID, taskID, params)
 }
 
+// Delete permanently removes a task belonging to the trusted owner.
+func (service *Service) Delete(ctx context.Context, userID, taskID string) error {
+	if !isUUID(taskID) {
+		return ErrNotFound
+	}
+
+	return service.repository.Delete(ctx, userID, taskID)
+}
+
 // List validates a calendar range and returns tasks belonging to the trusted owner.
 func (service *Service) List(ctx context.Context, userID, timeZone string, input ListInput) ([]Task, error) {
 	fromDate, fromErr := ParseCalendarDate(input.From)

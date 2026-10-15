@@ -19,6 +19,7 @@ type TaskService interface {
 	Create(context.Context, string, task.CreateInput) (task.Task, error)
 	GetByID(context.Context, string, string) (task.Task, error)
 	Update(context.Context, string, string, task.UpdateInput) (task.Task, error)
+	Delete(context.Context, string, string) error
 	List(context.Context, string, string, task.ListInput) ([]task.Task, error)
 }
 
@@ -193,6 +194,21 @@ func (handler *taskHandler) update(response http.ResponseWriter, request *http.R
 		return
 	}
 	writeJSON(response, http.StatusOK, result)
+}
+
+func (handler *taskHandler) delete(response http.ResponseWriter, request *http.Request) {
+	identity, ok := sessionIdentityFromContext(request.Context())
+	if !ok {
+		writeProblem(response, http.StatusUnauthorized, "authentication_required")
+		return
+	}
+
+	if err := handler.service.Delete(request.Context(), identity.User.ID, request.PathValue("id")); err != nil {
+		handler.writeError(response, err)
+		return
+	}
+
+	response.WriteHeader(http.StatusNoContent)
 }
 
 func (handler *taskHandler) list(response http.ResponseWriter, request *http.Request) {

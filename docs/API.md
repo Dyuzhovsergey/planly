@@ -223,6 +223,8 @@ Name=__Host-planly_session; HttpOnly; Secure; SameSite=Lax; Path=/
 
 `completed: true` атомарно устанавливает `completed_at` временем PostgreSQL только для активной задачи, а `completed: false` очищает его только для завершённой. Повторный completion-only запрос с тем же значением сохраняет прежние `completed_at` и `updated_at`. Если вместе с `completed` переданы другие изменяемые поля, они обновляются тем же SQL-запросом.
 
+`DELETE /api/v1/tasks/{id}` физически удаляет задачу и при успехе возвращает `204 No Content` без тела. Endpoint требует допустимые Origin, session-cookie и `X-CSRF-Token`; `user_id` поступает только из session identity. Чужая, отсутствующая, повторно удалённая и некорректно идентифицированная задача возвращают одинаковый `404 task_not_found`.
+
 Завершение задачи:
 
 ```json
