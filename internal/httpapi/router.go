@@ -46,6 +46,14 @@ func NewRouter(dependencies Dependencies) http.Handler {
 				auth.requireSession(http.HandlerFunc(tasks.getByID)),
 			)
 			router.Handle(
+				"PATCH /api/v1/tasks/{id}",
+				auth.requireOrigin(auth.requireSession(auth.requireCSRF(http.HandlerFunc(tasks.update)))),
+			)
+			router.Handle(
+				"DELETE /api/v1/tasks/{id}",
+				auth.requireOrigin(auth.requireSession(auth.requireCSRF(http.HandlerFunc(tasks.delete)))),
+			)
+			router.Handle(
 				"POST /api/v1/tasks",
 				auth.requireOrigin(auth.requireSession(auth.requireCSRF(http.HandlerFunc(tasks.create)))),
 			)

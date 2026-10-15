@@ -28,7 +28,7 @@ func (service *Service) Create(ctx context.Context, userID string, input CreateI
 	title := strings.TrimSpace(input.Title)
 	fields := validateTaskText(title, input.Description)
 
-	schedule, scheduleFields := parseCreateSchedule(input.Schedule)
+	schedule, scheduleFields := parseSchedule(input.Schedule)
 	for field, messages := range scheduleFields {
 		fields[field] = messages
 	}
@@ -50,6 +50,54 @@ func (service *Service) GetByID(ctx context.Context, userID, taskID string) (Tas
 	}
 
 	return service.repository.FindByID(ctx, userID, taskID)
+}
+
+// Update validates, normalizes, and persists task changes for a trusted owner.
+func (service *Service) Update(ctx context.Context, userID, taskID string, input UpdateInput) (Task, error) {
+	if !isUUID(taskID) {
+		return Task{}, ErrNotFound
+	}
+
+	fields := make(map[string][]string)
+	params := UpdateParams{}
+	if input.Title != nil {
+		title := strings.TrimSpace(*input.Title)
+		if messages := validateTaskTitle(title); len(messages) != 0 {
+			fields["title"] = messages
+		}
+		params.Title = &title
+	}
+	if input.Description != nil {
+		if messages := validateTaskDescription(*input.Description); len(messages) != 0 {
+			fields["description"] = messages
+		}
+		params.Description = input.Description
+	}
+	if input.Schedule != nil {
+		schedule, scheduleFields := parseSchedule(*input.Schedule)
+		for field, messages := range scheduleFields {
+			fields[field] = messages
+		}
+		params.Schedule = &schedule
+	}
+	params.Completed = input.Completed
+	if input.Title == nil && input.Description == nil && input.Schedule == nil && input.Completed == nil {
+		fields["body"] = []string{"must contain at least one of title, description, schedule, or completed"}
+	}
+	if len(fields) != 0 {
+		return Task{}, &ValidationError{Fields: fields}
+	}
+
+	return service.repository.Update(ctx, userID, taskID, params)
+}
+
+// Delete permanently removes a task belonging to the trusted owner.
+func (service *Service) Delete(ctx context.Context, userID, taskID string) error {
+	if !isUUID(taskID) {
+		return ErrNotFound
+	}
+
+	return service.repository.Delete(ctx, userID, taskID)
 }
 
 // List validates a calendar range and returns tasks belonging to the trusted owner.
@@ -120,19 +168,34 @@ func isUUID(value string) bool {
 func validateTaskText(title, description string) map[string][]string {
 	fields := make(map[string][]string)
 
-	if length := utf8.RuneCountInString(title); length < 1 || length > maximumTitleLength {
-		fields["title"] = []string{"must contain between 1 and 200 characters"}
-	} else if strings.ContainsRune(title, '\x00') {
-		fields["title"] = []string{"must not contain NUL characters"}
+	if messages := validateTaskTitle(title); len(messages) != 0 {
+		fields["title"] = messages
 	}
-	if strings.ContainsRune(description, '\x00') {
-		fields["description"] = []string{"must not contain NUL characters"}
+	if messages := validateTaskDescription(description); len(messages) != 0 {
+		fields["description"] = messages
 	}
 
 	return fields
 }
 
-func parseCreateSchedule(input CreateScheduleInput) (Schedule, map[string][]string) {
+func validateTaskTitle(title string) []string {
+	if length := utf8.RuneCountInString(title); length < 1 || length > maximumTitleLength {
+		return []string{"must contain between 1 and 200 characters"}
+	}
+	if strings.ContainsRune(title, '\x00') {
+		return []string{"must not contain NUL characters"}
+	}
+	return nil
+}
+
+func validateTaskDescription(description string) []string {
+	if strings.ContainsRune(description, '\x00') {
+		return []string{"must not contain NUL characters"}
+	}
+	return nil
+}
+
+func parseSchedule(input ScheduleInput) (Schedule, map[string][]string) {
 	fields := make(map[string][]string)
 
 	switch input.Type {

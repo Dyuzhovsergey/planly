@@ -1,7 +1,9 @@
 package httpapi
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -16,6 +18,8 @@ import (
 type TaskService interface {
 	Create(context.Context, string, task.CreateInput) (task.Task, error)
 	GetByID(context.Context, string, string) (task.Task, error)
+	Update(context.Context, string, string, task.UpdateInput) (task.Task, error)
+	Delete(context.Context, string, string) error
 	List(context.Context, string, string, task.ListInput) ([]task.Task, error)
 }
 
@@ -33,6 +37,32 @@ type createTaskScheduleRequest struct {
 	Type string `json:"type"`
 	At   string `json:"at"`
 	Date string `json:"date"`
+}
+
+type updateTaskRequest struct {
+	Title       optionalField[string]                    `json:"title"`
+	Description optionalField[string]                    `json:"description"`
+	Schedule    optionalField[createTaskScheduleRequest] `json:"schedule"`
+	Completed   optionalField[bool]                      `json:"completed"`
+}
+
+type optionalField[T any] struct {
+	value T
+	set   bool
+}
+
+func (field *optionalField[T]) UnmarshalJSON(data []byte) error {
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return errors.New("field must not be null")
+	}
+
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&field.value); err != nil {
+		return err
+	}
+	field.set = true
+	return nil
 }
 
 type taskResponse struct {
@@ -76,7 +106,7 @@ func (handler *taskHandler) create(response http.ResponseWriter, request *http.R
 	created, err := handler.service.Create(request.Context(), identity.User.ID, task.CreateInput{
 		Title:       body.Title,
 		Description: body.Description,
-		Schedule: task.CreateScheduleInput{
+		Schedule: task.ScheduleInput{
 			Type: body.Schedule.Type,
 			At:   body.Schedule.At,
 			Date: body.Schedule.Date,
@@ -114,6 +144,71 @@ func (handler *taskHandler) getByID(response http.ResponseWriter, request *http.
 		return
 	}
 	writeJSON(response, http.StatusOK, result)
+}
+
+func (handler *taskHandler) update(response http.ResponseWriter, request *http.Request) {
+	identity, ok := sessionIdentityFromContext(request.Context())
+	if !ok {
+		writeProblem(response, http.StatusUnauthorized, "authentication_required")
+		return
+	}
+
+	var body updateTaskRequest
+	if err := decodeJSON(response, request, &body); err != nil {
+		writeProblem(response, http.StatusBadRequest, "invalid_request")
+		return
+	}
+
+	input := task.UpdateInput{}
+	if body.Title.set {
+		input.Title = &body.Title.value
+	}
+	if body.Description.set {
+		input.Description = &body.Description.value
+	}
+	if body.Schedule.set {
+		input.Schedule = &task.ScheduleInput{
+			Type: body.Schedule.value.Type,
+			At:   body.Schedule.value.At,
+			Date: body.Schedule.value.Date,
+		}
+	}
+	if body.Completed.set {
+		input.Completed = &body.Completed.value
+	}
+
+	updated, err := handler.service.Update(
+		request.Context(),
+		identity.User.ID,
+		request.PathValue("id"),
+		input,
+	)
+	if err != nil {
+		handler.writeError(response, err)
+		return
+	}
+
+	result, err := makeTaskResponse(updated)
+	if err != nil {
+		handler.writeError(response, err)
+		return
+	}
+	writeJSON(response, http.StatusOK, result)
+}
+
+func (handler *taskHandler) delete(response http.ResponseWriter, request *http.Request) {
+	identity, ok := sessionIdentityFromContext(request.Context())
+	if !ok {
+		writeProblem(response, http.StatusUnauthorized, "authentication_required")
+		return
+	}
+
+	if err := handler.service.Delete(request.Context(), identity.User.ID, request.PathValue("id")); err != nil {
+		handler.writeError(response, err)
+		return
+	}
+
+	response.WriteHeader(http.StatusNoContent)
 }
 
 func (handler *taskHandler) list(response http.ResponseWriter, request *http.Request) {

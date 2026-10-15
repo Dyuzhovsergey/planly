@@ -62,6 +62,72 @@ func (repository *TaskRepository) FindByID(ctx context.Context, userID, taskID s
 	return result, nil
 }
 
+// Update changes a task only when it belongs to the trusted owner.
+func (repository *TaskRepository) Update(
+	ctx context.Context,
+	userID string,
+	taskID string,
+	params task.UpdateParams,
+) (task.Task, error) {
+	var scheduledAt, scheduledDate any
+	var err error
+	if params.Schedule != nil {
+		scheduledAt, scheduledDate, err = taskScheduleValues(*params.Schedule)
+		if err != nil {
+			return task.Task{}, err
+		}
+	}
+
+	result, err := scanTask(repository.pool.QueryRow(ctx, `
+		UPDATE tasks
+		SET title = CASE WHEN $3::boolean THEN $4::text ELSE title END,
+			description = CASE WHEN $5::boolean THEN $6::text ELSE description END,
+			scheduled_at = CASE WHEN $7::boolean THEN $8::timestamptz ELSE scheduled_at END,
+			scheduled_date = CASE WHEN $7::boolean THEN $9::date ELSE scheduled_date END,
+			completed_at = CASE
+				WHEN NOT $10::boolean THEN completed_at
+				WHEN $11::boolean THEN COALESCE(completed_at, now())
+				ELSE NULL
+			END,
+			updated_at = CASE
+				WHEN $3::boolean OR $5::boolean OR $7::boolean
+					OR ($10::boolean AND ((completed_at IS NOT NULL) IS DISTINCT FROM $11::boolean))
+				THEN now()
+				ELSE updated_at
+			END
+		WHERE user_id = $1 AND id = $2
+		RETURNING id, user_id, title, description, scheduled_at, scheduled_date,
+			completed_at, created_at, updated_at
+	`, userID, taskID,
+		params.Title != nil, optionalStringValue(params.Title),
+		params.Description != nil, optionalStringValue(params.Description),
+		params.Schedule != nil, scheduledAt, scheduledDate,
+		params.Completed != nil, optionalBoolValue(params.Completed),
+	))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return task.Task{}, task.ErrNotFound
+	}
+	if err != nil {
+		return task.Task{}, fmt.Errorf("update task by owner and ID: %w", err)
+	}
+	return result, nil
+}
+
+// Delete permanently removes a task only when it belongs to the trusted owner.
+func (repository *TaskRepository) Delete(ctx context.Context, userID, taskID string) error {
+	commandTag, err := repository.pool.Exec(ctx, `
+		DELETE FROM tasks
+		WHERE user_id = $1 AND id = $2
+	`, userID, taskID)
+	if err != nil {
+		return fmt.Errorf("delete task by owner and ID: %w", err)
+	}
+	if commandTag.RowsAffected() == 0 {
+		return task.ErrNotFound
+	}
+	return nil
+}
+
 // ListByRange returns the trusted owner's tasks inside timed and all-day boundaries.
 func (repository *TaskRepository) ListByRange(
 	ctx context.Context,
@@ -163,6 +229,17 @@ func taskScheduleValues(schedule task.Schedule) (any, any, error) {
 		return nil, value, nil
 	}
 	return nil, nil, task.ErrInvalidSchedule
+}
+
+func optionalStringValue(value *string) any {
+	if value == nil {
+		return nil
+	}
+	return *value
+}
+
+func optionalBoolValue(value *bool) bool {
+	return value != nil && *value
 }
 
 func calendarDateValue(date task.CalendarDate) (pgtype.Date, error) {
