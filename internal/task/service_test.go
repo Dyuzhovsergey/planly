@@ -17,6 +17,11 @@ type fakeRepository struct {
 	foundTaskID   string
 	foundTask     Task
 	findErr       error
+	updatedUserID string
+	updatedTaskID string
+	updatedParams UpdateParams
+	updatedTask   Task
+	updateErr     error
 	listedUserID  string
 	listedRange   ListRange
 	listedTasks   []Task
@@ -35,6 +40,13 @@ func (repository *fakeRepository) FindByID(_ context.Context, userID, taskID str
 	return repository.foundTask, repository.findErr
 }
 
+func (repository *fakeRepository) Update(_ context.Context, userID, taskID string, params UpdateParams) (Task, error) {
+	repository.updatedUserID = userID
+	repository.updatedTaskID = taskID
+	repository.updatedParams = params
+	return repository.updatedTask, repository.updateErr
+}
+
 func (repository *fakeRepository) ListByRange(_ context.Context, userID string, listRange ListRange) ([]Task, error) {
 	repository.listedUserID = userID
 	repository.listedRange = listRange
@@ -48,7 +60,7 @@ func TestServiceCreateNormalizesTimedTaskAndUsesTrustedOwner(t *testing.T) {
 	created, err := service.Create(context.Background(), "trusted-user-id", CreateInput{
 		Title:       "  Позвонить врачу  ",
 		Description: "  сохранить пробелы  ",
-		Schedule: CreateScheduleInput{
+		Schedule: ScheduleInput{
 			Type: "timed",
 			At:   "2026-10-08T18:30:00+03:00",
 		},
@@ -80,7 +92,7 @@ func TestServiceCreateParsesAllDayDate(t *testing.T) {
 
 	_, err := service.Create(context.Background(), "user-id", CreateInput{
 		Title: "Подать показания",
-		Schedule: CreateScheduleInput{
+		Schedule: ScheduleInput{
 			Type: "allDay",
 			Date: "2026-10-25",
 		},
@@ -105,13 +117,13 @@ func TestServiceCreateValidatesInput(t *testing.T) {
 		{name: "NUL title", input: CreateInput{Title: "bad\x00title", Schedule: validTimedInput()}, wantField: "title"},
 		{name: "NUL description", input: CreateInput{Title: "Task", Description: "bad\x00description", Schedule: validTimedInput()}, wantField: "description"},
 		{name: "missing type", input: CreateInput{Title: "Task"}, wantField: "schedule.type"},
-		{name: "unknown type", input: CreateInput{Title: "Task", Schedule: CreateScheduleInput{Type: "event"}}, wantField: "schedule.type"},
-		{name: "missing timed at", input: CreateInput{Title: "Task", Schedule: CreateScheduleInput{Type: "timed"}}, wantField: "schedule.at"},
-		{name: "invalid timed at", input: CreateInput{Title: "Task", Schedule: CreateScheduleInput{Type: "timed", At: "tomorrow"}}, wantField: "schedule.at"},
-		{name: "timed with date", input: CreateInput{Title: "Task", Schedule: CreateScheduleInput{Type: "timed", At: "2026-10-08T15:30:00Z", Date: "2026-10-08"}}, wantField: "schedule.date"},
-		{name: "missing all-day date", input: CreateInput{Title: "Task", Schedule: CreateScheduleInput{Type: "allDay"}}, wantField: "schedule.date"},
-		{name: "invalid all-day date", input: CreateInput{Title: "Task", Schedule: CreateScheduleInput{Type: "allDay", Date: "2026-02-30"}}, wantField: "schedule.date"},
-		{name: "all-day with at", input: CreateInput{Title: "Task", Schedule: CreateScheduleInput{Type: "allDay", Date: "2026-10-08", At: "2026-10-08T15:30:00Z"}}, wantField: "schedule.at"},
+		{name: "unknown type", input: CreateInput{Title: "Task", Schedule: ScheduleInput{Type: "event"}}, wantField: "schedule.type"},
+		{name: "missing timed at", input: CreateInput{Title: "Task", Schedule: ScheduleInput{Type: "timed"}}, wantField: "schedule.at"},
+		{name: "invalid timed at", input: CreateInput{Title: "Task", Schedule: ScheduleInput{Type: "timed", At: "tomorrow"}}, wantField: "schedule.at"},
+		{name: "timed with date", input: CreateInput{Title: "Task", Schedule: ScheduleInput{Type: "timed", At: "2026-10-08T15:30:00Z", Date: "2026-10-08"}}, wantField: "schedule.date"},
+		{name: "missing all-day date", input: CreateInput{Title: "Task", Schedule: ScheduleInput{Type: "allDay"}}, wantField: "schedule.date"},
+		{name: "invalid all-day date", input: CreateInput{Title: "Task", Schedule: ScheduleInput{Type: "allDay", Date: "2026-02-30"}}, wantField: "schedule.date"},
+		{name: "all-day with at", input: CreateInput{Title: "Task", Schedule: ScheduleInput{Type: "allDay", Date: "2026-10-08", At: "2026-10-08T15:30:00Z"}}, wantField: "schedule.at"},
 	}
 
 	for _, test := range tests {
@@ -192,6 +204,125 @@ func TestServiceGetByIDPropagatesRepositoryError(t *testing.T) {
 	_, err := service.GetByID(context.Background(), "trusted-user-id", "0199c471-a941-7b29-87af-59c00893d91c")
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("GetByID() error = %v, want %v", err, wantErr)
+	}
+}
+
+func TestServiceUpdateNormalizesFieldsAndUsesTrustedOwner(t *testing.T) {
+	const taskID = "0199c471-a941-7b29-87af-59c00893d91c"
+	title := "  Обновлённая задача  "
+	description := ""
+	schedule := ScheduleInput{Type: "allDay", Date: "2026-10-25"}
+	repository := &fakeRepository{updatedTask: Task{ID: taskID}}
+	service := NewService(repository)
+
+	updated, err := service.Update(context.Background(), "trusted-user-id", taskID, UpdateInput{
+		Title:       &title,
+		Description: &description,
+		Schedule:    &schedule,
+	})
+	if err != nil {
+		t.Fatalf("Update() error = %v", err)
+	}
+	if updated.ID != taskID {
+		t.Fatalf("Update() task ID = %q, want %q", updated.ID, taskID)
+	}
+	if repository.updatedUserID != "trusted-user-id" || repository.updatedTaskID != taskID {
+		t.Errorf("repository Update() arguments = %q, %q, want trusted owner and task ID", repository.updatedUserID, repository.updatedTaskID)
+	}
+	if repository.updatedParams.Title == nil || *repository.updatedParams.Title != "Обновлённая задача" {
+		t.Errorf("updated title = %v, want normalized title", repository.updatedParams.Title)
+	}
+	if repository.updatedParams.Description == nil || *repository.updatedParams.Description != "" {
+		t.Errorf("updated description = %v, want explicit empty string", repository.updatedParams.Description)
+	}
+	if repository.updatedParams.Schedule == nil {
+		t.Fatal("updated schedule is nil, want all-day 2026-10-25")
+	}
+	date, ok := repository.updatedParams.Schedule.Date()
+	if !ok || date.String() != "2026-10-25" {
+		t.Errorf("updated schedule = %+v, want all-day 2026-10-25", repository.updatedParams.Schedule)
+	}
+}
+
+func TestServiceUpdateKeepsOmittedFieldsUnset(t *testing.T) {
+	const taskID = "0199c471-a941-7b29-87af-59c00893d91c"
+	description := "Новое описание"
+	repository := &fakeRepository{}
+	service := NewService(repository)
+
+	_, err := service.Update(context.Background(), "trusted-user-id", taskID, UpdateInput{Description: &description})
+	if err != nil {
+		t.Fatalf("Update() error = %v", err)
+	}
+	if repository.updatedParams.Title != nil || repository.updatedParams.Schedule != nil {
+		t.Errorf("omitted params = %+v, want nil title and schedule", repository.updatedParams)
+	}
+	if repository.updatedParams.Description == nil || *repository.updatedParams.Description != description {
+		t.Errorf("description = %v, want %q", repository.updatedParams.Description, description)
+	}
+}
+
+func TestServiceUpdateValidatesInput(t *testing.T) {
+	blankTitle := "   "
+	longTitle := strings.Repeat("я", 201)
+	nulTitle := "bad\x00title"
+	nulDescription := "bad\x00description"
+	invalidSchedule := ScheduleInput{Type: "timed", At: "tomorrow"}
+	tests := []struct {
+		name      string
+		input     UpdateInput
+		wantField string
+	}{
+		{name: "empty body", input: UpdateInput{}, wantField: "body"},
+		{name: "blank title", input: UpdateInput{Title: &blankTitle}, wantField: "title"},
+		{name: "long title", input: UpdateInput{Title: &longTitle}, wantField: "title"},
+		{name: "NUL title", input: UpdateInput{Title: &nulTitle}, wantField: "title"},
+		{name: "NUL description", input: UpdateInput{Description: &nulDescription}, wantField: "description"},
+		{name: "invalid schedule", input: UpdateInput{Schedule: &invalidSchedule}, wantField: "schedule.at"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			repository := &fakeRepository{}
+			service := NewService(repository)
+
+			_, err := service.Update(context.Background(), "trusted-user-id", "0199c471-a941-7b29-87af-59c00893d91c", test.input)
+			var validationErr *ValidationError
+			if !errors.As(err, &validationErr) {
+				t.Fatalf("Update() error = %v, want ValidationError", err)
+			}
+			if len(validationErr.Fields[test.wantField]) == 0 {
+				t.Errorf("validation fields = %v, want %q", validationErr.Fields, test.wantField)
+			}
+			if repository.updatedUserID != "" {
+				t.Error("repository Update() called after invalid input")
+			}
+		})
+	}
+}
+
+func TestServiceUpdateRejectsInvalidIDAsNotFound(t *testing.T) {
+	title := "Task"
+	repository := &fakeRepository{}
+	service := NewService(repository)
+
+	_, err := service.Update(context.Background(), "trusted-user-id", "not-a-uuid", UpdateInput{Title: &title})
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("Update() error = %v, want ErrNotFound", err)
+	}
+	if repository.updatedUserID != "" {
+		t.Error("repository Update() called for invalid task ID")
+	}
+}
+
+func TestServiceUpdatePropagatesRepositoryError(t *testing.T) {
+	wantErr := errors.New("database unavailable")
+	title := "Task"
+	service := NewService(&fakeRepository{updateErr: wantErr})
+
+	_, err := service.Update(context.Background(), "trusted-user-id", "0199c471-a941-7b29-87af-59c00893d91c", UpdateInput{Title: &title})
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("Update() error = %v, want %v", err, wantErr)
 	}
 }
 
@@ -322,6 +453,6 @@ func TestServiceListPropagatesRepositoryError(t *testing.T) {
 	}
 }
 
-func validTimedInput() CreateScheduleInput {
-	return CreateScheduleInput{Type: "timed", At: "2026-10-08T15:30:00Z"}
+func validTimedInput() ScheduleInput {
+	return ScheduleInput{Type: "timed", At: "2026-10-08T15:30:00Z"}
 }

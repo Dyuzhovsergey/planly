@@ -22,6 +22,11 @@ type fakeTaskService struct {
 	foundTaskID    string
 	foundTask      task.Task
 	findErr        error
+	updatedUserID  string
+	updatedTaskID  string
+	updatedInput   task.UpdateInput
+	updatedTask    task.Task
+	updateErr      error
 	listedUserID   string
 	listedTimeZone string
 	listedInput    task.ListInput
@@ -39,6 +44,13 @@ func (service *fakeTaskService) GetByID(_ context.Context, userID, taskID string
 	service.foundUserID = userID
 	service.foundTaskID = taskID
 	return service.foundTask, service.findErr
+}
+
+func (service *fakeTaskService) Update(_ context.Context, userID, taskID string, input task.UpdateInput) (task.Task, error) {
+	service.updatedUserID = userID
+	service.updatedTaskID = taskID
+	service.updatedInput = input
+	return service.updatedTask, service.updateErr
 }
 
 func (service *fakeTaskService) List(
@@ -394,6 +406,241 @@ func TestListTasksMapsInternalErrorWithoutDetails(t *testing.T) {
 	}
 }
 
+func TestUpdateTaskUsesAuthenticatedOwnerAndReturnsPublicTask(t *testing.T) {
+	const taskID = "0199c471-a941-7b29-87af-59c00893d91c"
+	date, err := task.ParseCalendarDate("2026-10-25")
+	if err != nil {
+		t.Fatalf("ParseCalendarDate() error = %v", err)
+	}
+	createdAt := time.Date(2026, time.October, 14, 9, 0, 0, 0, time.UTC)
+	updatedAt := createdAt.Add(time.Hour)
+	tasks := &fakeTaskService{updatedTask: task.Task{
+		ID:          taskID,
+		UserID:      "trusted-user-id",
+		Title:       "Обновлённая задача",
+		Description: "",
+		Schedule:    task.NewAllDaySchedule(date),
+		CreatedAt:   createdAt,
+		UpdatedAt:   updatedAt,
+	}}
+	router := newTestTaskRouter(tasks, authenticatedTaskService())
+	request := newUpdateTaskRequest(taskID, `{
+		"title":"  Обновлённая задача  ",
+		"description":"",
+		"schedule":{"type":"allDay","date":"2026-10-25"}
+	}`)
+	response := httptest.NewRecorder()
+
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", response.Code, http.StatusOK, response.Body.String())
+	}
+	if tasks.updatedUserID != "trusted-user-id" || tasks.updatedTaskID != taskID {
+		t.Errorf("Update() owner/task ID = %q, %q, want trusted owner and task ID", tasks.updatedUserID, tasks.updatedTaskID)
+	}
+	if tasks.updatedInput.Title == nil || *tasks.updatedInput.Title != "  Обновлённая задача  " {
+		t.Errorf("Update() title input = %v", tasks.updatedInput.Title)
+	}
+	if tasks.updatedInput.Description == nil || *tasks.updatedInput.Description != "" {
+		t.Errorf("Update() description input = %v, want explicit empty string", tasks.updatedInput.Description)
+	}
+	if tasks.updatedInput.Schedule == nil || tasks.updatedInput.Schedule.Type != "allDay" || tasks.updatedInput.Schedule.Date != "2026-10-25" {
+		t.Errorf("Update() schedule input = %+v", tasks.updatedInput.Schedule)
+	}
+	body := response.Body.String()
+	for _, want := range []string{
+		`"id":"` + taskID + `"`,
+		`"description":""`,
+		`"type":"allDay"`,
+		`"date":"2026-10-25"`,
+		`"updatedAt":"2026-10-14T10:00:00Z"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body = %s, want %s", body, want)
+		}
+	}
+	if strings.Contains(body, "trusted-user-id") || strings.Contains(body, "userId") {
+		t.Errorf("response leaks owner ID: %s", body)
+	}
+}
+
+func TestUpdateTaskKeepsOmittedFieldsUnset(t *testing.T) {
+	tasks := &fakeTaskService{updatedTask: task.Task{
+		ID:        "0199c471-a941-7b29-87af-59c00893d91c",
+		Title:     "Task",
+		Schedule:  task.NewTimedSchedule(time.Date(2026, time.October, 14, 9, 0, 0, 0, time.UTC)),
+		CreatedAt: time.Date(2026, time.October, 14, 8, 0, 0, 0, time.UTC),
+		UpdatedAt: time.Date(2026, time.October, 14, 9, 0, 0, 0, time.UTC),
+	}}
+	router := newTestTaskRouter(tasks, authenticatedTaskService())
+	request := newUpdateTaskRequest(tasks.updatedTask.ID, `{"description":"Новое описание"}`)
+	response := httptest.NewRecorder()
+
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", response.Code, http.StatusOK, response.Body.String())
+	}
+	if tasks.updatedInput.Title != nil || tasks.updatedInput.Schedule != nil {
+		t.Errorf("omitted update fields = %+v, want nil title and schedule", tasks.updatedInput)
+	}
+	if tasks.updatedInput.Description == nil || *tasks.updatedInput.Description != "Новое описание" {
+		t.Errorf("description input = %v", tasks.updatedInput.Description)
+	}
+}
+
+func TestUpdateTaskRejectsInvalidJSONShape(t *testing.T) {
+	tests := []string{
+		`{"userId":"attacker-controlled"}`,
+		`{"completed":true}`,
+		`{"title":null}`,
+		`{"description":null}`,
+		`{"schedule":null}`,
+		`{"schedule":{"type":"allDay","date":"2026-10-25","unknown":true}}`,
+	}
+
+	for _, body := range tests {
+		t.Run(body, func(t *testing.T) {
+			tasks := &fakeTaskService{}
+			router := newTestTaskRouter(tasks, authenticatedTaskService())
+			request := newUpdateTaskRequest("0199c471-a941-7b29-87af-59c00893d91c", body)
+			response := httptest.NewRecorder()
+
+			router.ServeHTTP(response, request)
+
+			if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), `"code":"invalid_request"`) {
+				t.Fatalf("status = %d; body=%s, want invalid_request", response.Code, response.Body.String())
+			}
+			if tasks.updatedUserID != "" {
+				t.Error("Update() called after invalid JSON shape")
+			}
+		})
+	}
+}
+
+func TestUpdateTaskRejectsWrongOriginBeforeAuthentication(t *testing.T) {
+	authService := authenticatedTaskService()
+	tasks := &fakeTaskService{}
+	router := newTestTaskRouter(tasks, authService)
+	request := newUpdateTaskRequest("0199c471-a941-7b29-87af-59c00893d91c", `{"title":"Task"}`)
+	request.Header.Set("Origin", "https://attacker.example")
+	response := httptest.NewRecorder()
+
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusForbidden || !strings.Contains(response.Body.String(), `"code":"origin_not_allowed"`) {
+		t.Fatalf("status = %d; body=%s, want origin_not_allowed", response.Code, response.Body.String())
+	}
+	if authService.authenticatedToken != "" || tasks.updatedUserID != "" {
+		t.Error("request continued after rejected Origin")
+	}
+}
+
+func TestUpdateTaskRequiresSession(t *testing.T) {
+	tasks := &fakeTaskService{}
+	router := newTestTaskRouter(tasks, &fakeAuthService{})
+	request := newUpdateTaskRequest("0199c471-a941-7b29-87af-59c00893d91c", `{"title":"Task"}`)
+	request.Header.Del("Cookie")
+	response := httptest.NewRecorder()
+
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusUnauthorized || !strings.Contains(response.Body.String(), `"code":"authentication_required"`) {
+		t.Fatalf("status = %d; body=%s, want authentication_required", response.Code, response.Body.String())
+	}
+	if tasks.updatedUserID != "" {
+		t.Error("Update() called without a session")
+	}
+}
+
+func TestUpdateTaskRequiresValidCSRF(t *testing.T) {
+	for _, token := range []string{"", "wrong-token"} {
+		t.Run(token, func(t *testing.T) {
+			tasks := &fakeTaskService{}
+			router := newTestTaskRouter(tasks, authenticatedTaskService())
+			request := newUpdateTaskRequest("0199c471-a941-7b29-87af-59c00893d91c", `{"title":"Task"}`)
+			request.Header.Set("X-CSRF-Token", token)
+			response := httptest.NewRecorder()
+
+			router.ServeHTTP(response, request)
+
+			if response.Code != http.StatusForbidden || !strings.Contains(response.Body.String(), `"code":"csrf_failed"`) {
+				t.Fatalf("status = %d; body=%s, want csrf_failed", response.Code, response.Body.String())
+			}
+			if tasks.updatedUserID != "" {
+				t.Error("Update() called after rejected CSRF")
+			}
+		})
+	}
+}
+
+func TestUpdateTaskMapsValidationError(t *testing.T) {
+	tasks := &fakeTaskService{updateErr: &task.ValidationError{Fields: map[string][]string{
+		"body": {"must contain at least one of title, description, or schedule"},
+	}}}
+	router := newTestTaskRouter(tasks, authenticatedTaskService())
+	request := newUpdateTaskRequest("0199c471-a941-7b29-87af-59c00893d91c", `{}`)
+	response := httptest.NewRecorder()
+
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusUnprocessableEntity || !strings.Contains(response.Body.String(), `"code":"validation_failed"`) {
+		t.Fatalf("status = %d; body=%s, want validation_failed", response.Code, response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), `"body"`) {
+		t.Errorf("body = %s, want body validation field", response.Body.String())
+	}
+}
+
+func TestUpdateTaskMapsNotFoundIdentically(t *testing.T) {
+	var bodies []string
+	tests := []struct {
+		name   string
+		taskID string
+	}{
+		{name: "missing", taskID: "0199c471-a941-7b29-87af-59c00893d91c"},
+		{name: "foreign", taskID: "0199c471-a941-7b29-87af-59c00893d91c"},
+		{name: "invalid ID", taskID: "not-a-uuid"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			tasks := &fakeTaskService{updateErr: task.ErrNotFound}
+			router := newTestTaskRouter(tasks, authenticatedTaskService())
+			request := newUpdateTaskRequest(test.taskID, `{"title":"Task"}`)
+			response := httptest.NewRecorder()
+
+			router.ServeHTTP(response, request)
+
+			if response.Code != http.StatusNotFound || !strings.Contains(response.Body.String(), `"code":"task_not_found"`) {
+				t.Fatalf("status = %d; body=%s, want task_not_found", response.Code, response.Body.String())
+			}
+			bodies = append(bodies, response.Body.String())
+		})
+	}
+	for index := 1; index < len(bodies); index++ {
+		if bodies[index] != bodies[0] {
+			t.Errorf("not-found responses differ: %q != %q", bodies[index], bodies[0])
+		}
+	}
+}
+
+func TestUpdateTaskMapsInternalErrorWithoutDetails(t *testing.T) {
+	tasks := &fakeTaskService{updateErr: errors.New("database details")}
+	router := newTestTaskRouter(tasks, authenticatedTaskService())
+	request := newUpdateTaskRequest("0199c471-a941-7b29-87af-59c00893d91c", `{"title":"Task"}`)
+	response := httptest.NewRecorder()
+
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusInternalServerError)
+	}
+	if strings.Contains(response.Body.String(), "database details") {
+		t.Errorf("body leaks internal error: %s", response.Body.String())
+	}
+}
+
 func TestGetTaskUsesAuthenticatedOwnerAndReturnsPublicTask(t *testing.T) {
 	const taskID = "0199c471-a941-7b29-87af-59c00893d91c"
 	createdAt := time.Date(2026, time.October, 14, 9, 0, 0, 0, time.UTC)
@@ -553,6 +800,15 @@ func newCreateTaskRequest(body string) *http.Request {
 
 func newGetTaskRequest(taskID string) *http.Request {
 	request := httptest.NewRequest(http.MethodGet, "/api/v1/tasks/"+taskID, nil)
+	request.AddCookie(&http.Cookie{Name: localSessionCookie, Value: "session-token"})
+	return request
+}
+
+func newUpdateTaskRequest(taskID, body string) *http.Request {
+	request := httptest.NewRequest(http.MethodPatch, "/api/v1/tasks/"+taskID, strings.NewReader(body))
+	request.Header.Set("Origin", testOrigin)
+	request.Header.Set("X-CSRF-Token", "csrf-token")
+	request.Header.Set("Content-Type", "application/json")
 	request.AddCookie(&http.Cookie{Name: localSessionCookie, Value: "session-token"})
 	return request
 }

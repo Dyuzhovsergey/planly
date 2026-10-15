@@ -21,6 +21,13 @@ type CreateParams struct {
 	Schedule    Schedule
 }
 
+// UpdateParams contains validated task changes. Nil fields remain unchanged.
+type UpdateParams struct {
+	Title       *string
+	Description *string
+	Schedule    *Schedule
+}
+
 // ListRange contains validated boundaries for timed and all-day task filtering.
 type ListRange struct {
 	FromTime time.Time
@@ -36,6 +43,8 @@ type Repository interface {
 	Create(ctx context.Context, userID string, params CreateParams) (Task, error)
 	// FindByID returns a task only when it belongs to the trusted owner.
 	FindByID(ctx context.Context, userID, taskID string) (Task, error)
+	// Update changes a task only when it belongs to the trusted owner.
+	Update(ctx context.Context, userID, taskID string, params UpdateParams) (Task, error)
 	// ListByRange returns tasks belonging to the trusted owner within a calendar range.
 	ListByRange(ctx context.Context, userID string, listRange ListRange) ([]Task, error)
 }

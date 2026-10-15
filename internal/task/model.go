@@ -21,11 +21,18 @@ func (err *ValidationError) Error() string {
 type CreateInput struct {
 	Title       string
 	Description string
-	Schedule    CreateScheduleInput
+	Schedule    ScheduleInput
 }
 
-// CreateScheduleInput is the external representation of a timed or all-day schedule.
-type CreateScheduleInput struct {
+// UpdateInput contains optional untrusted values used by the task update use case.
+type UpdateInput struct {
+	Title       *string
+	Description *string
+	Schedule    *ScheduleInput
+}
+
+// ScheduleInput is the external representation of a timed or all-day schedule.
+type ScheduleInput struct {
 	Type string
 	At   string
 	Date string

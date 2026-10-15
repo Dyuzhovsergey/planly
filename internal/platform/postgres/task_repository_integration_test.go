@@ -97,8 +97,91 @@ func TestTaskRepositoryIntegration(t *testing.T) {
 	}
 
 	assertTaskRangeListing(t, ctx, repository, ownerID, otherUserID, timedTask, allDayTask)
+	assertTaskUpdate(t, ctx, repository, ownerID, otherUserID)
 	assertTaskScheduleConstraint(t, ctx, pool, ownerID)
 	assertTaskRangeIndexes(t, ctx, pool)
+}
+
+func assertTaskUpdate(
+	t *testing.T,
+	ctx context.Context,
+	repository *TaskRepository,
+	ownerID string,
+	otherUserID string,
+) {
+	t.Helper()
+
+	originalAt := time.Date(2027, time.January, 10, 12, 30, 0, 0, time.UTC)
+	original, err := repository.Create(ctx, ownerID, task.CreateParams{
+		Title:       "Original title",
+		Description: "Original description",
+		Schedule:    task.NewTimedSchedule(originalAt),
+	})
+	if err != nil {
+		t.Fatalf("Create() update fixture error = %v", err)
+	}
+
+	time.Sleep(time.Millisecond)
+	updatedTitle := "Updated title"
+	emptyDescription := ""
+	textUpdated, err := repository.Update(ctx, ownerID, original.ID, task.UpdateParams{
+		Title:       &updatedTitle,
+		Description: &emptyDescription,
+	})
+	if err != nil {
+		t.Fatalf("Update() text fields error = %v", err)
+	}
+	if textUpdated.Title != updatedTitle || textUpdated.Description != "" {
+		t.Errorf("Update() text fields = %q, %q", textUpdated.Title, textUpdated.Description)
+	}
+	assertTimedSchedule(t, textUpdated.Schedule, originalAt)
+	if !textUpdated.CreatedAt.Equal(original.CreatedAt) {
+		t.Errorf("Update() created_at = %v, want %v", textUpdated.CreatedAt, original.CreatedAt)
+	}
+	if !textUpdated.UpdatedAt.After(original.UpdatedAt) {
+		t.Errorf("Update() updated_at = %v, want after %v", textUpdated.UpdatedAt, original.UpdatedAt)
+	}
+
+	allDayDate := mustTaskCalendarDate(t, "2027-01-11")
+	allDaySchedule := task.NewAllDaySchedule(allDayDate)
+	allDayUpdated, err := repository.Update(ctx, ownerID, original.ID, task.UpdateParams{Schedule: &allDaySchedule})
+	if err != nil {
+		t.Fatalf("Update() timed to all-day error = %v", err)
+	}
+	if allDayUpdated.Title != updatedTitle || allDayUpdated.Description != "" {
+		t.Errorf("Update() changed omitted text fields: %+v", allDayUpdated)
+	}
+	date, ok := allDayUpdated.Schedule.Date()
+	if !ok || date != allDayDate {
+		t.Errorf("Update() all-day schedule = %v, %v, want %v", date, ok, allDayDate)
+	}
+
+	newAt := time.Date(2027, time.January, 12, 8, 15, 0, 0, time.UTC)
+	timedSchedule := task.NewTimedSchedule(newAt)
+	timedUpdated, err := repository.Update(ctx, ownerID, original.ID, task.UpdateParams{Schedule: &timedSchedule})
+	if err != nil {
+		t.Fatalf("Update() all-day to timed error = %v", err)
+	}
+	assertTimedSchedule(t, timedUpdated.Schedule, newAt)
+
+	foreignTitle := "Foreign change"
+	if _, err := repository.Update(ctx, otherUserID, original.ID, task.UpdateParams{Title: &foreignTitle}); !errors.Is(err, task.ErrNotFound) {
+		t.Fatalf("Update() foreign owner error = %v, want ErrNotFound", err)
+	}
+	if _, err := repository.Update(ctx, ownerID, "00000000-0000-0000-0000-000000000000", task.UpdateParams{Title: &foreignTitle}); !errors.Is(err, task.ErrNotFound) {
+		t.Fatalf("Update() missing task error = %v, want ErrNotFound", err)
+	}
+
+	found, err := repository.FindByID(ctx, ownerID, original.ID)
+	if err != nil {
+		t.Fatalf("FindByID() after foreign update error = %v", err)
+	}
+	if found.Title != updatedTitle {
+		t.Errorf("foreign Update() changed title to %q, want %q", found.Title, updatedTitle)
+	}
+	if _, err := repository.Update(ctx, ownerID, original.ID, task.UpdateParams{Schedule: &task.Schedule{}}); !errors.Is(err, task.ErrInvalidSchedule) {
+		t.Fatalf("Update() invalid schedule error = %v, want ErrInvalidSchedule", err)
+	}
 }
 
 func assertTaskRangeListing(

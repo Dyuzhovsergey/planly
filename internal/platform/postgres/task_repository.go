@@ -62,6 +62,46 @@ func (repository *TaskRepository) FindByID(ctx context.Context, userID, taskID s
 	return result, nil
 }
 
+// Update changes a task only when it belongs to the trusted owner.
+func (repository *TaskRepository) Update(
+	ctx context.Context,
+	userID string,
+	taskID string,
+	params task.UpdateParams,
+) (task.Task, error) {
+	var scheduledAt, scheduledDate any
+	var err error
+	if params.Schedule != nil {
+		scheduledAt, scheduledDate, err = taskScheduleValues(*params.Schedule)
+		if err != nil {
+			return task.Task{}, err
+		}
+	}
+
+	result, err := scanTask(repository.pool.QueryRow(ctx, `
+		UPDATE tasks
+		SET title = CASE WHEN $3::boolean THEN $4::text ELSE title END,
+			description = CASE WHEN $5::boolean THEN $6::text ELSE description END,
+			scheduled_at = CASE WHEN $7::boolean THEN $8::timestamptz ELSE scheduled_at END,
+			scheduled_date = CASE WHEN $7::boolean THEN $9::date ELSE scheduled_date END,
+			updated_at = now()
+		WHERE user_id = $1 AND id = $2
+		RETURNING id, user_id, title, description, scheduled_at, scheduled_date,
+			completed_at, created_at, updated_at
+	`, userID, taskID,
+		params.Title != nil, optionalStringValue(params.Title),
+		params.Description != nil, optionalStringValue(params.Description),
+		params.Schedule != nil, scheduledAt, scheduledDate,
+	))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return task.Task{}, task.ErrNotFound
+	}
+	if err != nil {
+		return task.Task{}, fmt.Errorf("update task by owner and ID: %w", err)
+	}
+	return result, nil
+}
+
 // ListByRange returns the trusted owner's tasks inside timed and all-day boundaries.
 func (repository *TaskRepository) ListByRange(
 	ctx context.Context,
@@ -163,6 +203,13 @@ func taskScheduleValues(schedule task.Schedule) (any, any, error) {
 		return nil, value, nil
 	}
 	return nil, nil, task.ErrInvalidSchedule
+}
+
+func optionalStringValue(value *string) any {
+	if value == nil {
+		return nil
+	}
+	return *value
 }
 
 func calendarDateValue(date task.CalendarDate) (pgtype.Date, error) {
