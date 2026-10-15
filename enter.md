@@ -19,7 +19,6 @@ curl -s -c /tmp/planly-cookie.txt \
 ```
 
 
-
 ### 2. Получить `taskId`
 
 Запросите список своих задач:
