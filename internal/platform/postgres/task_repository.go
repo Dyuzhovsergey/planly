@@ -84,7 +84,17 @@ func (repository *TaskRepository) Update(
 			description = CASE WHEN $5::boolean THEN $6::text ELSE description END,
 			scheduled_at = CASE WHEN $7::boolean THEN $8::timestamptz ELSE scheduled_at END,
 			scheduled_date = CASE WHEN $7::boolean THEN $9::date ELSE scheduled_date END,
-			updated_at = now()
+			completed_at = CASE
+				WHEN NOT $10::boolean THEN completed_at
+				WHEN $11::boolean THEN COALESCE(completed_at, now())
+				ELSE NULL
+			END,
+			updated_at = CASE
+				WHEN $3::boolean OR $5::boolean OR $7::boolean
+					OR ($10::boolean AND ((completed_at IS NOT NULL) IS DISTINCT FROM $11::boolean))
+				THEN now()
+				ELSE updated_at
+			END
 		WHERE user_id = $1 AND id = $2
 		RETURNING id, user_id, title, description, scheduled_at, scheduled_date,
 			completed_at, created_at, updated_at
@@ -92,6 +102,7 @@ func (repository *TaskRepository) Update(
 		params.Title != nil, optionalStringValue(params.Title),
 		params.Description != nil, optionalStringValue(params.Description),
 		params.Schedule != nil, scheduledAt, scheduledDate,
+		params.Completed != nil, optionalBoolValue(params.Completed),
 	))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return task.Task{}, task.ErrNotFound
@@ -210,6 +221,10 @@ func optionalStringValue(value *string) any {
 		return nil
 	}
 	return *value
+}
+
+func optionalBoolValue(value *bool) bool {
+	return value != nil && *value
 }
 
 func calendarDateValue(date task.CalendarDate) (pgtype.Date, error) {

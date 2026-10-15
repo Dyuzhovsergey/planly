@@ -212,6 +212,7 @@ func TestServiceUpdateNormalizesFieldsAndUsesTrustedOwner(t *testing.T) {
 	title := "  Обновлённая задача  "
 	description := ""
 	schedule := ScheduleInput{Type: "allDay", Date: "2026-10-25"}
+	completed := true
 	repository := &fakeRepository{updatedTask: Task{ID: taskID}}
 	service := NewService(repository)
 
@@ -219,6 +220,7 @@ func TestServiceUpdateNormalizesFieldsAndUsesTrustedOwner(t *testing.T) {
 		Title:       &title,
 		Description: &description,
 		Schedule:    &schedule,
+		Completed:   &completed,
 	})
 	if err != nil {
 		t.Fatalf("Update() error = %v", err)
@@ -242,6 +244,9 @@ func TestServiceUpdateNormalizesFieldsAndUsesTrustedOwner(t *testing.T) {
 	if !ok || date.String() != "2026-10-25" {
 		t.Errorf("updated schedule = %+v, want all-day 2026-10-25", repository.updatedParams.Schedule)
 	}
+	if repository.updatedParams.Completed == nil || !*repository.updatedParams.Completed {
+		t.Errorf("updated completed = %v, want true", repository.updatedParams.Completed)
+	}
 }
 
 func TestServiceUpdateKeepsOmittedFieldsUnset(t *testing.T) {
@@ -254,11 +259,26 @@ func TestServiceUpdateKeepsOmittedFieldsUnset(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Update() error = %v", err)
 	}
-	if repository.updatedParams.Title != nil || repository.updatedParams.Schedule != nil {
-		t.Errorf("omitted params = %+v, want nil title and schedule", repository.updatedParams)
+	if repository.updatedParams.Title != nil || repository.updatedParams.Schedule != nil || repository.updatedParams.Completed != nil {
+		t.Errorf("omitted params = %+v, want nil title, schedule, and completed", repository.updatedParams)
 	}
 	if repository.updatedParams.Description == nil || *repository.updatedParams.Description != description {
 		t.Errorf("description = %v, want %q", repository.updatedParams.Description, description)
+	}
+}
+
+func TestServiceUpdatePassesCompletedFalse(t *testing.T) {
+	const taskID = "0199c471-a941-7b29-87af-59c00893d91c"
+	completed := false
+	repository := &fakeRepository{}
+	service := NewService(repository)
+
+	_, err := service.Update(context.Background(), "trusted-user-id", taskID, UpdateInput{Completed: &completed})
+	if err != nil {
+		t.Fatalf("Update() error = %v", err)
+	}
+	if repository.updatedParams.Completed == nil || *repository.updatedParams.Completed {
+		t.Errorf("updated completed = %v, want false", repository.updatedParams.Completed)
 	}
 }
 

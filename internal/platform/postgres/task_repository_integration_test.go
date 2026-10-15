@@ -164,6 +164,76 @@ func assertTaskUpdate(
 	}
 	assertTimedSchedule(t, timedUpdated.Schedule, newAt)
 
+	completed := true
+	time.Sleep(time.Millisecond)
+	completedTask, err := repository.Update(ctx, ownerID, original.ID, task.UpdateParams{Completed: &completed})
+	if err != nil {
+		t.Fatalf("Update() complete task error = %v", err)
+	}
+	if completedTask.CompletedAt == nil {
+		t.Fatal("Update() completed_at is nil after completion")
+	}
+	if !completedTask.UpdatedAt.After(timedUpdated.UpdatedAt) {
+		t.Errorf("Update() completion updated_at = %v, want after %v", completedTask.UpdatedAt, timedUpdated.UpdatedAt)
+	}
+
+	time.Sleep(time.Millisecond)
+	repeatedCompletion, err := repository.Update(ctx, ownerID, original.ID, task.UpdateParams{Completed: &completed})
+	if err != nil {
+		t.Fatalf("Update() repeated completion error = %v", err)
+	}
+	if repeatedCompletion.CompletedAt == nil || !repeatedCompletion.CompletedAt.Equal(*completedTask.CompletedAt) {
+		t.Errorf("Update() repeated completed_at = %v, want %v", repeatedCompletion.CompletedAt, completedTask.CompletedAt)
+	}
+	if !repeatedCompletion.UpdatedAt.Equal(completedTask.UpdatedAt) {
+		t.Errorf("Update() repeated completion updated_at = %v, want unchanged %v", repeatedCompletion.UpdatedAt, completedTask.UpdatedAt)
+	}
+
+	completed = false
+	time.Sleep(time.Millisecond)
+	reopened, err := repository.Update(ctx, ownerID, original.ID, task.UpdateParams{Completed: &completed})
+	if err != nil {
+		t.Fatalf("Update() reopen task error = %v", err)
+	}
+	if reopened.CompletedAt != nil {
+		t.Errorf("Update() reopened completed_at = %v, want nil", reopened.CompletedAt)
+	}
+	if !reopened.UpdatedAt.After(repeatedCompletion.UpdatedAt) {
+		t.Errorf("Update() reopen updated_at = %v, want after %v", reopened.UpdatedAt, repeatedCompletion.UpdatedAt)
+	}
+
+	time.Sleep(time.Millisecond)
+	repeatedReopen, err := repository.Update(ctx, ownerID, original.ID, task.UpdateParams{Completed: &completed})
+	if err != nil {
+		t.Fatalf("Update() repeated reopen error = %v", err)
+	}
+	if repeatedReopen.CompletedAt != nil {
+		t.Errorf("Update() repeated reopen completed_at = %v, want nil", repeatedReopen.CompletedAt)
+	}
+	if !repeatedReopen.UpdatedAt.Equal(reopened.UpdatedAt) {
+		t.Errorf("Update() repeated reopen updated_at = %v, want unchanged %v", repeatedReopen.UpdatedAt, reopened.UpdatedAt)
+	}
+
+	combinedTitle := "Completed combined update"
+	combinedDescription := "Updated together with completion"
+	combinedDate := mustTaskCalendarDate(t, "2027-01-13")
+	combinedSchedule := task.NewAllDaySchedule(combinedDate)
+	completed = true
+	combined, err := repository.Update(ctx, ownerID, original.ID, task.UpdateParams{
+		Title:       &combinedTitle,
+		Description: &combinedDescription,
+		Schedule:    &combinedSchedule,
+		Completed:   &completed,
+	})
+	if err != nil {
+		t.Fatalf("Update() combined completion error = %v", err)
+	}
+	combinedDateResult, ok := combined.Schedule.Date()
+	if combined.Title != combinedTitle || combined.Description != combinedDescription ||
+		!ok || combinedDateResult != combinedDate || combined.CompletedAt == nil {
+		t.Errorf("Update() combined result = %+v, want all fields and completion changed", combined)
+	}
+
 	foreignTitle := "Foreign change"
 	if _, err := repository.Update(ctx, otherUserID, original.ID, task.UpdateParams{Title: &foreignTitle}); !errors.Is(err, task.ErrNotFound) {
 		t.Fatalf("Update() foreign owner error = %v, want ErrNotFound", err)
@@ -176,8 +246,8 @@ func assertTaskUpdate(
 	if err != nil {
 		t.Fatalf("FindByID() after foreign update error = %v", err)
 	}
-	if found.Title != updatedTitle {
-		t.Errorf("foreign Update() changed title to %q, want %q", found.Title, updatedTitle)
+	if found.Title != combinedTitle {
+		t.Errorf("foreign Update() changed title to %q, want %q", found.Title, combinedTitle)
 	}
 	if _, err := repository.Update(ctx, ownerID, original.ID, task.UpdateParams{Schedule: &task.Schedule{}}); !errors.Is(err, task.ErrInvalidSchedule) {
 		t.Fatalf("Update() invalid schedule error = %v, want ErrInvalidSchedule", err)

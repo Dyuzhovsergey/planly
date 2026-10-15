@@ -414,12 +414,14 @@ func TestUpdateTaskUsesAuthenticatedOwnerAndReturnsPublicTask(t *testing.T) {
 	}
 	createdAt := time.Date(2026, time.October, 14, 9, 0, 0, 0, time.UTC)
 	updatedAt := createdAt.Add(time.Hour)
+	completedAt := createdAt.Add(30 * time.Minute)
 	tasks := &fakeTaskService{updatedTask: task.Task{
 		ID:          taskID,
 		UserID:      "trusted-user-id",
 		Title:       "Обновлённая задача",
 		Description: "",
 		Schedule:    task.NewAllDaySchedule(date),
+		CompletedAt: &completedAt,
 		CreatedAt:   createdAt,
 		UpdatedAt:   updatedAt,
 	}}
@@ -427,7 +429,8 @@ func TestUpdateTaskUsesAuthenticatedOwnerAndReturnsPublicTask(t *testing.T) {
 	request := newUpdateTaskRequest(taskID, `{
 		"title":"  Обновлённая задача  ",
 		"description":"",
-		"schedule":{"type":"allDay","date":"2026-10-25"}
+		"schedule":{"type":"allDay","date":"2026-10-25"},
+		"completed":true
 	}`)
 	response := httptest.NewRecorder()
 
@@ -448,12 +451,17 @@ func TestUpdateTaskUsesAuthenticatedOwnerAndReturnsPublicTask(t *testing.T) {
 	if tasks.updatedInput.Schedule == nil || tasks.updatedInput.Schedule.Type != "allDay" || tasks.updatedInput.Schedule.Date != "2026-10-25" {
 		t.Errorf("Update() schedule input = %+v", tasks.updatedInput.Schedule)
 	}
+	if tasks.updatedInput.Completed == nil || !*tasks.updatedInput.Completed {
+		t.Errorf("Update() completed input = %v, want true", tasks.updatedInput.Completed)
+	}
 	body := response.Body.String()
 	for _, want := range []string{
 		`"id":"` + taskID + `"`,
 		`"description":""`,
 		`"type":"allDay"`,
 		`"date":"2026-10-25"`,
+		`"completed":true`,
+		`"completedAt":"2026-10-14T09:30:00Z"`,
 		`"updatedAt":"2026-10-14T10:00:00Z"`,
 	} {
 		if !strings.Contains(body, want) {
@@ -482,18 +490,44 @@ func TestUpdateTaskKeepsOmittedFieldsUnset(t *testing.T) {
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d; body=%s", response.Code, http.StatusOK, response.Body.String())
 	}
-	if tasks.updatedInput.Title != nil || tasks.updatedInput.Schedule != nil {
-		t.Errorf("omitted update fields = %+v, want nil title and schedule", tasks.updatedInput)
+	if tasks.updatedInput.Title != nil || tasks.updatedInput.Schedule != nil || tasks.updatedInput.Completed != nil {
+		t.Errorf("omitted update fields = %+v, want nil title, schedule, and completed", tasks.updatedInput)
 	}
 	if tasks.updatedInput.Description == nil || *tasks.updatedInput.Description != "Новое описание" {
 		t.Errorf("description input = %v", tasks.updatedInput.Description)
 	}
 }
 
+func TestUpdateTaskAcceptsCompletedFalse(t *testing.T) {
+	tasks := &fakeTaskService{updatedTask: task.Task{
+		ID:        "0199c471-a941-7b29-87af-59c00893d91c",
+		Title:     "Task",
+		Schedule:  task.NewTimedSchedule(time.Date(2026, time.October, 14, 9, 0, 0, 0, time.UTC)),
+		CreatedAt: time.Date(2026, time.October, 14, 8, 0, 0, 0, time.UTC),
+		UpdatedAt: time.Date(2026, time.October, 14, 10, 0, 0, 0, time.UTC),
+	}}
+	router := newTestTaskRouter(tasks, authenticatedTaskService())
+	request := newUpdateTaskRequest(tasks.updatedTask.ID, `{"completed":false}`)
+	response := httptest.NewRecorder()
+
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", response.Code, http.StatusOK, response.Body.String())
+	}
+	if tasks.updatedInput.Completed == nil || *tasks.updatedInput.Completed {
+		t.Errorf("Update() completed input = %v, want false", tasks.updatedInput.Completed)
+	}
+	if !strings.Contains(response.Body.String(), `"completed":false`) || !strings.Contains(response.Body.String(), `"completedAt":null`) {
+		t.Errorf("body = %s, want reopened task", response.Body.String())
+	}
+}
+
 func TestUpdateTaskRejectsInvalidJSONShape(t *testing.T) {
 	tests := []string{
 		`{"userId":"attacker-controlled"}`,
-		`{"completed":true}`,
+		`{"completed":null}`,
+		`{"completed":"true"}`,
 		`{"title":null}`,
 		`{"description":null}`,
 		`{"schedule":null}`,
@@ -577,7 +611,7 @@ func TestUpdateTaskRequiresValidCSRF(t *testing.T) {
 
 func TestUpdateTaskMapsValidationError(t *testing.T) {
 	tasks := &fakeTaskService{updateErr: &task.ValidationError{Fields: map[string][]string{
-		"body": {"must contain at least one of title, description, or schedule"},
+		"body": {"must contain at least one of title, description, schedule, or completed"},
 	}}}
 	router := newTestTaskRouter(tasks, authenticatedTaskService())
 	request := newUpdateTaskRequest("0199c471-a941-7b29-87af-59c00893d91c", `{}`)

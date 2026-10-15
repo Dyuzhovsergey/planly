@@ -29,6 +29,7 @@ type UpdateInput struct {
 	Title       *string
 	Description *string
 	Schedule    *ScheduleInput
+	Completed   *bool
 }
 
 // ScheduleInput is the external representation of a timed or all-day schedule.

@@ -80,8 +80,9 @@ func (service *Service) Update(ctx context.Context, userID, taskID string, input
 		}
 		params.Schedule = &schedule
 	}
-	if input.Title == nil && input.Description == nil && input.Schedule == nil {
-		fields["body"] = []string{"must contain at least one of title, description, or schedule"}
+	params.Completed = input.Completed
+	if input.Title == nil && input.Description == nil && input.Schedule == nil && input.Completed == nil {
+		fields["body"] = []string{"must contain at least one of title, description, schedule, or completed"}
 	}
 	if len(fields) != 0 {
 		return Task{}, &ValidationError{Fields: fields}

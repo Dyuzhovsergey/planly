@@ -26,6 +26,7 @@ type UpdateParams struct {
 	Title       *string
 	Description *string
 	Schedule    *Schedule
+	Completed   *bool
 }
 
 // ListRange contains validated boundaries for timed and all-day task filtering.

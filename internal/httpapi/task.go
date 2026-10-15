@@ -42,6 +42,7 @@ type updateTaskRequest struct {
 	Title       optionalField[string]                    `json:"title"`
 	Description optionalField[string]                    `json:"description"`
 	Schedule    optionalField[createTaskScheduleRequest] `json:"schedule"`
+	Completed   optionalField[bool]                      `json:"completed"`
 }
 
 type optionalField[T any] struct {
@@ -170,6 +171,9 @@ func (handler *taskHandler) update(response http.ResponseWriter, request *http.R
 			At:   body.Schedule.value.At,
 			Date: body.Schedule.value.Date,
 		}
+	}
+	if body.Completed.set {
+		input.Completed = &body.Completed.value
 	}
 
 	updated, err := handler.service.Update(
