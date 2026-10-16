@@ -47,8 +47,27 @@ async function fillAndSubmitLogin(email = 'user@example.com', password = 'passwo
   fireEvent.click(screen.getByRole('button', { name: 'Войти' }))
 }
 
+async function openRegistrationForm() {
+  fireEvent.click(await screen.findByRole('button', { name: 'Создать аккаунт' }))
+  return screen.findByRole('heading', { name: 'Создайте аккаунт' })
+}
+
+async function fillAndSubmitRegistration(
+  email = 'new-user@example.com',
+  password = 'correct horse battery staple',
+  timeZone = 'Europe/Moscow',
+) {
+  fireEvent.change(screen.getByLabelText('Email'), { target: { value: email } })
+  fireEvent.change(screen.getByLabelText('Пароль'), { target: { value: password } })
+  fireEvent.change(screen.getByLabelText('Часовая зона'), {
+    target: { value: timeZone },
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'Создать аккаунт' }))
+}
+
 afterEach(() => {
   cleanup()
+  vi.restoreAllMocks()
   vi.unstubAllGlobals()
 })
 
@@ -217,6 +236,128 @@ describe('session restoration', () => {
     expect(password).toHaveAttribute('type', 'text')
     fireEvent.click(screen.getByRole('button', { name: 'Скрыть пароль' }))
     expect(password).toHaveAttribute('type', 'password')
+  })
+
+  it('switches between login and registration without routing', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(authenticationRequiredResponse()))
+
+    renderApplication()
+    await openRegistrationForm()
+
+    expect(screen.getByLabelText('Часовая зона')).toHaveValue(
+      Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Войти' }))
+
+    expect(await screen.findByRole('heading', { name: 'Войдите в Planly' })).toBeInTheDocument()
+    expect(screen.queryByLabelText('Часовая зона')).not.toBeInTheDocument()
+  })
+
+  it('registers without reloading and keeps auth data only in provider memory', async () => {
+    const storageSpy = vi.spyOn(Storage.prototype, 'setItem')
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(authenticationRequiredResponse())
+      .mockResolvedValueOnce(jsonResponse(authEnvelope, 201))
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderApplication()
+    await openRegistrationForm()
+    await fillAndSubmitRegistration()
+
+    expect(await screen.findByText('user@example.com')).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    const [path, init] = fetchMock.mock.calls[1]
+    expect(path).toBe('/api/v1/auth/register')
+    expect(init).toEqual(expect.objectContaining({ method: 'POST', credentials: 'include' }))
+    expect(new Headers(init.headers).get('Content-Type')).toBe('application/json')
+    expect(JSON.parse(init.body as string)).toEqual({
+      email: 'new-user@example.com',
+      password: 'correct horse battery staple',
+      timeZone: 'Europe/Moscow',
+    })
+    expect(screen.queryByText(authEnvelope.csrfToken)).not.toBeInTheDocument()
+    expect(storageSpy).not.toHaveBeenCalled()
+  })
+
+  it('shows registration validation by field and focuses the first invalid field', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(authenticationRequiredResponse())
+      .mockResolvedValueOnce(
+        jsonResponse(
+          {
+            type: 'about:blank',
+            title: 'Unprocessable Entity',
+            status: 422,
+            code: 'validation_failed',
+            errors: {
+              email: ['must be a valid email address'],
+              password: ['must contain between 15 and 128 characters'],
+              timeZone: ['must be a valid IANA time zone'],
+            },
+          },
+          422,
+        ),
+      )
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderApplication()
+    await openRegistrationForm()
+    await fillAndSubmitRegistration('not-an-email', 'short', 'Mars/Olympus')
+
+    expect(await screen.findByText('must be a valid email address')).toBeInTheDocument()
+    expect(screen.getByText('must contain between 15 and 128 characters')).toBeInTheDocument()
+    expect(screen.getByText('must be a valid IANA time zone')).toBeInTheDocument()
+    expect(screen.getByLabelText('Email')).toHaveFocus()
+  })
+
+  it('shows an email conflict next to email and focuses it', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(authenticationRequiredResponse())
+      .mockResolvedValueOnce(
+        jsonResponse(
+          {
+            type: 'about:blank',
+            title: 'Conflict',
+            status: 409,
+            code: 'email_already_registered',
+          },
+          409,
+        ),
+      )
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderApplication()
+    await openRegistrationForm()
+    await fillAndSubmitRegistration()
+
+    expect(await screen.findByText('Пользователь с таким email уже зарегистрирован.')).toBeInTheDocument()
+    expect(screen.getByLabelText('Email')).toHaveFocus()
+  })
+
+  it('shows a recoverable registration error and prevents repeated submission', async () => {
+    let rejectRegistration: ((reason?: unknown) => void) | undefined
+    const registrationRequest = new Promise<Response>((_, reject) => {
+      rejectRegistration = reject
+    })
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(authenticationRequiredResponse())
+      .mockReturnValueOnce(registrationRequest)
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderApplication()
+    await openRegistrationForm()
+    await fillAndSubmitRegistration()
+    expect(screen.getByRole('button', { name: 'Создаём аккаунт…' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Создаём аккаунт…' }))
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+
+    rejectRegistration?.(new TypeError('network unavailable'))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Не удалось создать аккаунт')
+    expect(screen.getByRole('button', { name: 'Создать аккаунт' })).toBeEnabled()
   })
 
   it('logs out with the in-memory CSRF token and handles a 204 response', async () => {

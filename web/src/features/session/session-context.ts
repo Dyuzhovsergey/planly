@@ -1,11 +1,12 @@
 import { createContext, useContext } from 'react'
 
-import type { LoginCredentials, SessionState } from './types'
+import type { LoginCredentials, RegistrationInput, SessionState } from './types'
 
 export interface SessionContextValue {
   state: SessionState
   retry: () => void
   login: (credentials: LoginCredentials) => Promise<void>
+  register: (input: RegistrationInput) => Promise<void>
   logout: () => Promise<void>
 }
 

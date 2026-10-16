@@ -15,6 +15,12 @@ export interface LoginCredentials {
   password: string
 }
 
+export interface RegistrationInput {
+  email: string
+  password: string
+  timeZone: string
+}
+
 export type SessionState =
   | { status: 'loading' }
   | { status: 'authenticated'; user: User; csrfToken: string }

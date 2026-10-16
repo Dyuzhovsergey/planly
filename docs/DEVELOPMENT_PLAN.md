@@ -4,10 +4,10 @@
 
 ## Текущий статус
 
-- Стадия: Frontend login/logout принят пользователем после ручной браузерной проверки.
-- Завершённые инкременты: MVP-контракт; Go HTTP-сервер с `GET /health`; PostgreSQL 18.6, миграция `users` и `GET /ready`; Auth foundation; session authentication и `GET /api/v1/me`; изменение часовой зоны через `PATCH /api/v1/me`; Task storage foundation; Task creation API; Task retrieval API; Task list API; Task update API; Task completion API; Task delete API; Frontend foundation; Frontend login/logout.
-- Текущий инкремент: отсутствует; Frontend registration предложен для отдельного согласования.
-- Следующее действие: согласовать небольшой Frontend registration с формой email/password/IANA-таймзоны, серверной валидацией и переходом в authenticated-состояние через существующий `SessionProvider`.
+- Стадия: Frontend registration принят пользователем после ручной браузерной проверки.
+- Завершённые инкременты: MVP-контракт; Go HTTP-сервер с `GET /health`; PostgreSQL 18.6, миграция `users` и `GET /ready`; Auth foundation; session authentication и `GET /api/v1/me`; изменение часовой зоны через `PATCH /api/v1/me`; Task storage foundation; Task creation API; Task retrieval API; Task list API; Task update API; Task completion API; Task delete API; Frontend foundation; Frontend login/logout; Frontend registration.
+- Текущий инкремент: отсутствует; Frontend user time zone settings предложен для отдельного согласования.
+- Следующее действие: согласовать небольшую форму изменения IANA-таймзоны через существующие `SessionProvider` и `PATCH /api/v1/me` с session-cookie, browser Origin и CSRF из памяти.
 
 ## Предварительная последовательность
 
@@ -16,7 +16,7 @@
 - [x] Подключить PostgreSQL и базовые миграции; добавить `/ready` с проверкой доступности БД.
 - [x] Реализовать пользователей и аутентификацию (Auth foundation, session authentication, `GET /me` и `PATCH /me` приняты).
 - [x] Реализовать защищённое хранилище задач и обязательную серверную изоляцию пользовательских данных (storage, создание, получение, список, изменение, завершение и удаление приняты пользователем).
-- [ ] Создать React + TypeScript + Vite UI с Tailwind CSS + shadcn/ui (foundation и login/logout без shadcn/ui приняты; регистрация и продуктовые экраны ещё не реализованы).
+- [ ] Создать React + TypeScript + Vite UI с Tailwind CSS + shadcn/ui (foundation, login/logout и registration без shadcn/ui приняты; продуктовые экраны ещё не реализованы).
 - [ ] Выбрать библиотеку календаря, реализовать виды месяц / неделя / день.
 - [ ] Дополнить Docker Compose контейнерами приложения и настроить безопасное веб-развёртывание.
 - [ ] Отдельно спроектировать и проверить интеграцию с Яндекс Алисой.
@@ -261,3 +261,17 @@
 **Проверка и критерии готовности:** тесты покрывают login без перезагрузки, credentials и validation errors, сетевую ошибку, повторную отправку, переключение видимости пароля, CSRF logout, `204`, истёкшую сессию и сохранение пользователя при ошибке logout. Требуются успешные frontend lint/test/build, стандартные Go-проверки, Compose и ручная браузерная приёмка.
 
 **Статус:** принят пользователем после ручной браузерной проверки неверных и правильных credentials, восстановления сессии после перезагрузки, безопасного logout и сетевой ошибки.
+
+### Frontend registration
+
+**Цель и зачем сейчас:** завершить минимальный браузерный auth-сценарий после принятого login/logout, чтобы новый пользователь мог создать аккаунт и сразу получить действующую сессию без ручного API-запроса или перезагрузки страницы.
+
+**Результат и границы задачи:** добавлена форма регистрации с email, паролем и IANA-таймзоной, переключение между регистрацией и входом без router, обработка `validation_failed`, `email_already_registered` и сетевых ошибок, управление фокусом и защита от повторной отправки. Календарь, задачи, маршрутизация, пагинация, shadcn/ui и полноценный дизайн не добавлялись; backend API и зависимости не менялись.
+
+**Файлы:** `web/src/features/session/RegistrationForm.tsx`; существующие session types/API/context/provider и тесты; `web/src/app/App.tsx`; `README.md`; `docs/ARCHITECTURE.md`; `docs/DEVELOPMENT_PLAN.md`.
+
+**Архитектурные решения:** `SessionProvider` вызывает существующий `POST /api/v1/auth/register` и после `201` сохраняет `user` и `csrfToken` только в памяти, используя тот же authenticated-state, что и login. `credentials: "include"` позволяет браузеру принять HttpOnly session-cookie, а browser `Origin` проверяется backend. Часовая зона лениво предзаполняется через `Intl.DateTimeFormat().resolvedOptions().timeZone`, остаётся редактируемой, и backend остаётся источником истины для IANA-валидации. Пароль и токены не записываются в web storage.
+
+**Проверка и критерии готовности:** тесты покрывают переключение форм, browser time zone, точный registration payload, `201` без перезагрузки, хранение auth-envelope только в памяти, полевые validation errors и фокус, конфликт email, сетевую ошибку и повторную отправку. Требуются успешные frontend lint/test/build, стандартные Go-проверки, Compose и ручная браузерная приёмка регистрации и восстановления сессии.
+
+**Статус:** принят пользователем после ручной браузерной проверки регистрации, серверной валидации, конфликта email, восстановления сессии после перезагрузки и сетевой ошибки.

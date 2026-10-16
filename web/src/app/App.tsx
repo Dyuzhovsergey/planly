@@ -1,10 +1,14 @@
 import { useState } from 'react'
 
 import { LoginForm } from '../features/session/LoginForm'
+import { RegistrationForm } from '../features/session/RegistrationForm'
 import { useSession } from '../features/session/session-context'
 
+type AuthMode = 'login' | 'registration'
+
 export function App() {
-  const { state, retry, login, logout } = useSession()
+  const { state, retry, login, register, logout } = useSession()
+  const [authMode, setAuthMode] = useState<AuthMode>('login')
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [logoutError, setLogoutError] = useState(false)
 
@@ -17,6 +21,7 @@ export function App() {
     setLogoutError(false)
     try {
       await logout()
+      setAuthMode('login')
     } catch {
       setLogoutError(true)
     } finally {
@@ -31,7 +36,11 @@ export function App() {
           Planly
         </p>
         <h1 className="mt-2 text-3xl font-semibold text-slate-950">
-          {state.status === 'authenticated' ? 'С возвращением' : 'Войдите в Planly'}
+          {state.status === 'authenticated'
+            ? 'С возвращением'
+            : authMode === 'registration'
+              ? 'Создайте аккаунт'
+              : 'Войдите в Planly'}
         </h1>
 
         {state.status === 'loading' && (
@@ -63,7 +72,29 @@ export function App() {
           </div>
         )}
 
-        {state.status === 'anonymous' && <LoginForm onLogin={login} />}
+        {state.status === 'anonymous' && (
+          <>
+            {authMode === 'login' ? (
+              <LoginForm onLogin={login} />
+            ) : (
+              <RegistrationForm onRegister={register} />
+            )}
+            <p className="mt-6 text-center text-sm text-slate-600">
+              {authMode === 'login' ? 'Нет аккаунта?' : 'Уже зарегистрированы?'}{' '}
+              <button
+                className="min-h-11 cursor-pointer rounded-md px-2 font-medium text-indigo-700 hover:text-indigo-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                type="button"
+                onClick={() =>
+                  setAuthMode((current) =>
+                    current === 'login' ? 'registration' : 'login',
+                  )
+                }
+              >
+                {authMode === 'login' ? 'Создать аккаунт' : 'Войти'}
+              </button>
+            </p>
+          </>
+        )}
 
         {state.status === 'error' && (
           <div className="mt-6" role="alert">
