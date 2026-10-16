@@ -7,9 +7,9 @@ import {
 } from 'react'
 
 import { ApiError } from '../../shared/api/client'
-import { getCurrentUser } from './api'
+import { getCurrentUser, loginUser, logoutUser } from './api'
 import { SessionContext } from './session-context'
-import type { SessionState } from './types'
+import type { LoginCredentials, SessionState } from './types'
 
 interface SessionProviderProps {
   children: ReactNode
@@ -44,7 +44,34 @@ export function SessionProvider({ children }: SessionProviderProps) {
     setState({ status: 'loading' })
     setAttempt((current) => current + 1)
   }, [])
-  const value = useMemo(() => ({ state, retry }), [state, retry])
+
+  const login = useCallback(async (credentials: LoginCredentials) => {
+    const { user, csrfToken } = await loginUser(credentials)
+    setState({ status: 'authenticated', user, csrfToken })
+  }, [])
+
+  const logout = useCallback(async () => {
+    if (state.status !== 'authenticated') {
+      setState({ status: 'anonymous' })
+      return
+    }
+
+    try {
+      await logoutUser(state.csrfToken)
+      setState({ status: 'anonymous' })
+    } catch (error: unknown) {
+      if (error instanceof ApiError && error.status === 401) {
+        setState({ status: 'anonymous' })
+        return
+      }
+      throw error
+    }
+  }, [state])
+
+  const value = useMemo(
+    () => ({ state, retry, login, logout }),
+    [state, retry, login, logout],
+  )
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>
 }

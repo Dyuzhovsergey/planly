@@ -1,10 +1,12 @@
 import { createContext, useContext } from 'react'
 
-import type { SessionState } from './types'
+import type { LoginCredentials, SessionState } from './types'
 
 export interface SessionContextValue {
   state: SessionState
   retry: () => void
+  login: (credentials: LoginCredentials) => Promise<void>
+  logout: () => Promise<void>
 }
 
 export const SessionContext = createContext<SessionContextValue | null>(null)

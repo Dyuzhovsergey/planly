@@ -19,7 +19,7 @@ Planly — многопользовательское веб-приложени�
 
 ## Статус
 
-Минимальные модели `User` и `Task`, правила времени, аутентификация и REST API согласованы. API предоставляет диагностику, регистрацию, вход, получение и изменение часовой зоны текущего пользователя через `/api/v1/me`, выход и защищённый CRUD timed/all-day задач. Frontend foundation реализован на React + TypeScript + Vite: приложение восстанавливает текущего пользователя через `GET /api/v1/me` и различает состояния загрузки, действующей сессии, отсутствующей сессии и ошибки API. Календарь и управление задачами в UI ещё не реализованы.
+Минимальные модели `User` и `Task`, правила времени, аутентификация и REST API согласованы. API предоставляет диагностику, регистрацию, вход, получение и изменение часовой зоны текущего пользователя через `/api/v1/me`, выход и защищённый CRUD timed/all-day задач. Frontend на React + TypeScript + Vite восстанавливает текущего пользователя, предоставляет форму входа и безопасный выход с CSRF. Регистрация, календарь и управление задачами в UI ещё не реализованы.
 
 ## Локальный запуск
 
@@ -45,7 +45,7 @@ npm ci
 npm run dev
 ```
 
-Vite откроет приложение на `http://localhost:5173` и проксирует относительные запросы `/api` в Go API на `http://localhost:8080`. API client всегда отправляет cookie через `credentials: "include"`; полученные `user` и `csrfToken` хранятся только в памяти React. Для текущего безопасного `GET /api/v1/me` менять `APP_ORIGIN` не требуется.
+Vite откроет приложение на `http://localhost:5173` и проксирует относительные запросы `/api` в Go API на `http://localhost:8080`. API client всегда отправляет cookie через `credentials: "include"`; полученные `user` и `csrfToken` хранятся только в памяти React. Для browser login/logout `APP_ORIGIN` должен совпадать с origin Vite — `http://localhost:5173`. Если `.env` был создан раньше, обновите это значение вручную.
 
 Проверка процесса и готовности PostgreSQL:
 
@@ -64,13 +64,13 @@ curl -i http://localhost:8080/ready
 
 ### Проверка аутентификации
 
-`APP_ORIGIN` определяет единственный разрешённый browser origin. Для локальной проверки он равен `http://localhost:8080`.
+`APP_ORIGIN` определяет единственный разрешённый browser origin. Для локального frontend он равен `http://localhost:5173`.
 
 Регистрация с сохранением cookie в файл:
 
 ```bash
 curl -i -c /tmp/planly-cookie.txt \
-  -H 'Origin: http://localhost:8080' \
+  -H 'Origin: http://localhost:5173' \
   -H 'Content-Type: application/json' \
   -d '{"email":"user@example.com","password":"correct horse battery staple","timeZone":"Europe/Moscow"}' \
   http://localhost:8080/api/v1/auth/register
@@ -90,7 +90,7 @@ curl -i -b /tmp/planly-cookie.txt http://localhost:8080/api/v1/me
 
 ```bash
 curl -i -b /tmp/planly-cookie.txt \
-  -H 'Origin: http://localhost:8080' \
+  -H 'Origin: http://localhost:5173' \
   -H 'X-CSRF-Token: <csrfToken>' \
   -H 'Content-Type: application/json' \
   -X PATCH \
@@ -104,7 +104,7 @@ curl -i -b /tmp/planly-cookie.txt \
 
 ```bash
 curl -i -b /tmp/planly-cookie.txt \
-  -H 'Origin: http://localhost:8080' \
+  -H 'Origin: http://localhost:5173' \
   -H 'X-CSRF-Token: <csrfToken>' \
   -H 'Content-Type: application/json' \
   -d '{"title":"Позвонить врачу","schedule":{"type":"timed","at":"2026-10-14T18:30:00+03:00"}}' \
@@ -135,7 +135,7 @@ curl -i -b /tmp/planly-cookie.txt \
 
 ```bash
 curl -i -b /tmp/planly-cookie.txt \
-  -H 'Origin: http://localhost:8080' \
+  -H 'Origin: http://localhost:5173' \
   -H 'X-CSRF-Token: <csrfToken>' \
   -H 'Content-Type: application/json' \
   -X PATCH \
@@ -149,7 +149,7 @@ curl -i -b /tmp/planly-cookie.txt \
 
 ```bash
 curl -i -b /tmp/planly-cookie.txt \
-  -H 'Origin: http://localhost:8080' \
+  -H 'Origin: http://localhost:5173' \
   -H 'X-CSRF-Token: <csrfToken>' \
   -X DELETE \
   http://localhost:8080/api/v1/tasks/<taskId>
@@ -161,7 +161,7 @@ curl -i -b /tmp/planly-cookie.txt \
 
 ```bash
 curl -i -b /tmp/planly-cookie.txt \
-  -H 'Origin: http://localhost:8080' \
+  -H 'Origin: http://localhost:5173' \
   -H 'X-CSRF-Token: <csrfToken>' \
   -X POST http://localhost:8080/api/v1/auth/logout
 ```

@@ -10,6 +10,11 @@ export interface AuthEnvelope {
   csrfToken: string
 }
 
+export interface LoginCredentials {
+  email: string
+  password: string
+}
+
 export type SessionState =
   | { status: 'loading' }
   | { status: 'authenticated'; user: User; csrfToken: string }

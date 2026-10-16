@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { App } from '../../app/App'
@@ -22,7 +22,33 @@ function renderApplication() {
   )
 }
 
+function jsonResponse(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': status >= 400 ? 'application/problem+json' : 'application/json' },
+  })
+}
+
+function authenticationRequiredResponse() {
+  return jsonResponse(
+    {
+      type: 'about:blank',
+      title: 'Unauthorized',
+      status: 401,
+      code: 'authentication_required',
+    },
+    401,
+  )
+}
+
+async function fillAndSubmitLogin(email = 'user@example.com', password = 'password') {
+  fireEvent.change(await screen.findByLabelText('Email'), { target: { value: email } })
+  fireEvent.change(screen.getByLabelText('Пароль'), { target: { value: password } })
+  fireEvent.click(screen.getByRole('button', { name: 'Войти' }))
+}
+
 afterEach(() => {
+  cleanup()
   vi.unstubAllGlobals()
 })
 
@@ -37,10 +63,7 @@ describe('session restoration', () => {
 
   it('shows the authenticated user and sends the session cookie', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify(authEnvelope), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      }),
+      jsonResponse(authEnvelope),
     )
     vi.stubGlobal('fetch', fetchMock)
 
@@ -56,36 +79,18 @@ describe('session restoration', () => {
   })
 
   it('treats an unauthorized response as an anonymous session', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue(
-        new Response(
-          JSON.stringify({
-            type: 'about:blank',
-            title: 'Unauthorized',
-            status: 401,
-            code: 'authentication_required',
-          }),
-          { status: 401, headers: { 'Content-Type': 'application/problem+json' } },
-        ),
-      ),
-    )
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(authenticationRequiredResponse()))
 
     renderApplication()
 
-    expect(await screen.findByText(/Сессия не найдена/)).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Войти' })).toBeInTheDocument()
   })
 
   it('shows an error and restores the user after retry', async () => {
     const fetchMock = vi
       .fn()
       .mockRejectedValueOnce(new TypeError('network unavailable'))
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify(authEnvelope), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        }),
-      )
+      .mockResolvedValueOnce(jsonResponse(authEnvelope))
     vi.stubGlobal('fetch', fetchMock)
 
     renderApplication()
@@ -97,5 +102,166 @@ describe('session restoration', () => {
 
     expect(await screen.findByText('user@example.com')).toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('logs in without reloading and sends only the credentials', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(authenticationRequiredResponse())
+      .mockResolvedValueOnce(jsonResponse(authEnvelope))
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderApplication()
+    await fillAndSubmitLogin()
+
+    expect(await screen.findByText('user@example.com')).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    const [path, init] = fetchMock.mock.calls[1]
+    expect(path).toBe('/api/v1/auth/login')
+    expect(init).toEqual(expect.objectContaining({ method: 'POST', credentials: 'include' }))
+    expect(new Headers(init.headers).get('Content-Type')).toBe('application/json')
+    expect(JSON.parse(init.body as string)).toEqual({
+      email: 'user@example.com',
+      password: 'password',
+    })
+  })
+
+  it('shows invalid credentials without disclosing which field is wrong', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(authenticationRequiredResponse())
+      .mockResolvedValueOnce(
+        jsonResponse(
+          {
+            type: 'about:blank',
+            title: 'Unauthorized',
+            status: 401,
+            code: 'invalid_credentials',
+          },
+          401,
+        ),
+      )
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderApplication()
+    await fillAndSubmitLogin()
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Неверный email или пароль',
+    )
+    expect(screen.getByLabelText('Email')).toBeEnabled()
+    expect(screen.getByLabelText('Пароль')).toBeEnabled()
+  })
+
+  it('shows server validation by field and focuses the first invalid field', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(authenticationRequiredResponse())
+      .mockResolvedValueOnce(
+        jsonResponse(
+          {
+            type: 'about:blank',
+            title: 'Unprocessable Entity',
+            status: 422,
+            code: 'validation_failed',
+            errors: {
+              email: ['email is invalid'],
+              password: ['password is required'],
+            },
+          },
+          422,
+        ),
+      )
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderApplication()
+    await fillAndSubmitLogin('not-an-email', '')
+
+    expect(await screen.findByText('email is invalid')).toBeInTheDocument()
+    expect(screen.getByText('password is required')).toBeInTheDocument()
+    expect(screen.getByLabelText('Email')).toHaveFocus()
+  })
+
+  it('shows a recoverable login error and prevents repeated submission', async () => {
+    let rejectLogin: ((reason?: unknown) => void) | undefined
+    const loginRequest = new Promise<Response>((_, reject) => {
+      rejectLogin = reject
+    })
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(authenticationRequiredResponse())
+      .mockReturnValueOnce(loginRequest)
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderApplication()
+    await fillAndSubmitLogin()
+    expect(screen.getByRole('button', { name: 'Входим…' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Входим…' }))
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+
+    rejectLogin?.(new TypeError('network unavailable'))
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Не удалось выполнить вход',
+    )
+    expect(screen.getByRole('button', { name: 'Войти' })).toBeEnabled()
+  })
+
+  it('toggles password visibility without submitting the form', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(authenticationRequiredResponse()))
+
+    renderApplication()
+
+    const password = await screen.findByLabelText('Пароль')
+    expect(password).toHaveAttribute('type', 'password')
+    fireEvent.click(screen.getByRole('button', { name: 'Показать пароль' }))
+    expect(password).toHaveAttribute('type', 'text')
+    fireEvent.click(screen.getByRole('button', { name: 'Скрыть пароль' }))
+    expect(password).toHaveAttribute('type', 'password')
+  })
+
+  it('logs out with the in-memory CSRF token and handles a 204 response', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(authEnvelope))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderApplication()
+    fireEvent.click(await screen.findByRole('button', { name: 'Выйти' }))
+
+    expect(await screen.findByRole('button', { name: 'Войти' })).toBeInTheDocument()
+    const [path, init] = fetchMock.mock.calls[1]
+    expect(path).toBe('/api/v1/auth/logout')
+    expect(init).toEqual(expect.objectContaining({ method: 'POST', credentials: 'include' }))
+    expect(new Headers(init.headers).get('X-CSRF-Token')).toBe(authEnvelope.csrfToken)
+    expect(screen.queryByText(authEnvelope.csrfToken)).not.toBeInTheDocument()
+  })
+
+  it('keeps the authenticated user visible when logout fails', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(authEnvelope))
+      .mockRejectedValueOnce(new TypeError('network unavailable'))
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderApplication()
+    fireEvent.click(await screen.findByRole('button', { name: 'Выйти' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Не удалось выйти')
+    expect(screen.getByText('user@example.com')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Выйти' })).toBeEnabled()
+  })
+
+  it('clears local session state when logout reports an expired session', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(authEnvelope))
+      .mockResolvedValueOnce(authenticationRequiredResponse())
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderApplication()
+    fireEvent.click(await screen.findByRole('button', { name: 'Выйти' }))
+
+    expect(await screen.findByRole('button', { name: 'Войти' })).toBeInTheDocument()
   })
 })
