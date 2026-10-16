@@ -4,10 +4,10 @@
 
 ## Текущий статус
 
-- Стадия: Frontend login/logout реализован; ожидается ручная браузерная приёмка.
-- Завершённые инкременты: MVP-контракт; Go HTTP-сервер с `GET /health`; PostgreSQL 18.6, миграция `users` и `GET /ready`; Auth foundation; session authentication и `GET /api/v1/me`; изменение часовой зоны через `PATCH /api/v1/me`; Task storage foundation; Task creation API; Task retrieval API; Task list API; Task update API; Task completion API; Task delete API; Frontend foundation.
-- Текущий инкремент: Frontend login/logout — форма входа, API-ошибки и защищённый выход через единый `SessionProvider` реализованы.
-- Следующее действие: вручную проверить login/logout, ошибки credentials/сети, блокировку повторной отправки и восстановление сессии после перезагрузки.
+- Стадия: Frontend login/logout принят пользователем после ручной браузерной проверки.
+- Завершённые инкременты: MVP-контракт; Go HTTP-сервер с `GET /health`; PostgreSQL 18.6, миграция `users` и `GET /ready`; Auth foundation; session authentication и `GET /api/v1/me`; изменение часовой зоны через `PATCH /api/v1/me`; Task storage foundation; Task creation API; Task retrieval API; Task list API; Task update API; Task completion API; Task delete API; Frontend foundation; Frontend login/logout.
+- Текущий инкремент: отсутствует; Frontend registration предложен для отдельного согласования.
+- Следующее действие: согласовать небольшой Frontend registration с формой email/password/IANA-таймзоны, серверной валидацией и переходом в authenticated-состояние через существующий `SessionProvider`.
 
 ## Предварительная последовательность
 
@@ -16,7 +16,7 @@
 - [x] Подключить PostgreSQL и базовые миграции; добавить `/ready` с проверкой доступности БД.
 - [x] Реализовать пользователей и аутентификацию (Auth foundation, session authentication, `GET /me` и `PATCH /me` приняты).
 - [x] Реализовать защищённое хранилище задач и обязательную серверную изоляцию пользовательских данных (storage, создание, получение, список, изменение, завершение и удаление приняты пользователем).
-- [ ] Создать React + TypeScript + Vite UI с Tailwind CSS + shadcn/ui (foundation без shadcn/ui принят; продуктовые экраны ещё не реализованы).
+- [ ] Создать React + TypeScript + Vite UI с Tailwind CSS + shadcn/ui (foundation и login/logout без shadcn/ui приняты; регистрация и продуктовые экраны ещё не реализованы).
 - [ ] Выбрать библиотеку календаря, реализовать виды месяц / неделя / день.
 - [ ] Дополнить Docker Compose контейнерами приложения и настроить безопасное веб-развёртывание.
 - [ ] Отдельно спроектировать и проверить интеграцию с Яндекс Алисой.
@@ -260,4 +260,4 @@
 
 **Проверка и критерии готовности:** тесты покрывают login без перезагрузки, credentials и validation errors, сетевую ошибку, повторную отправку, переключение видимости пароля, CSRF logout, `204`, истёкшую сессию и сохранение пользователя при ошибке logout. Требуются успешные frontend lint/test/build, стандартные Go-проверки, Compose и ручная браузерная приёмка.
 
-**Статус:** реализован; ожидается ручная браузерная приёмка пользователем.
+**Статус:** принят пользователем после ручной браузерной проверки неверных и правильных credentials, восстановления сессии после перезагрузки, безопасного logout и сетевой ошибки.
