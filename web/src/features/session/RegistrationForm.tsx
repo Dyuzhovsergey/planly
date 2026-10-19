@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useRef, useState } from 'react'
 
 import { ApiError } from '../../shared/api/client'
+import { browserTimeZoneAdapter } from './time-zone'
 import type { RegistrationInput } from './types'
 
 interface RegistrationFormProps {
@@ -10,21 +11,11 @@ interface RegistrationFormProps {
 interface FieldErrors {
   email?: string
   password?: string
-  timeZone?: string
-}
-
-function getBrowserTimeZone() {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
-  } catch {
-    return 'UTC'
-  }
 }
 
 export function RegistrationForm({ onRegister }: RegistrationFormProps) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [timeZone, setTimeZone] = useState(getBrowserTimeZone)
   const [showPassword, setShowPassword] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
@@ -32,7 +23,6 @@ export function RegistrationForm({ onRegister }: RegistrationFormProps) {
   const [fieldToFocus, setFieldToFocus] = useState<keyof FieldErrors | null>(null)
   const emailInput = useRef<HTMLInputElement>(null)
   const passwordInput = useRef<HTMLInputElement>(null)
-  const timeZoneInput = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (isSubmitting) {
@@ -42,8 +32,6 @@ export function RegistrationForm({ onRegister }: RegistrationFormProps) {
       emailInput.current?.focus()
     } else if (fieldToFocus === 'password') {
       passwordInput.current?.focus()
-    } else if (fieldToFocus === 'timeZone') {
-      timeZoneInput.current?.focus()
     }
   }, [fieldToFocus, isSubmitting])
 
@@ -59,7 +47,11 @@ export function RegistrationForm({ onRegister }: RegistrationFormProps) {
     setFieldToFocus(null)
 
     try {
-      await onRegister({ email, password, timeZone })
+      await onRegister({
+        email,
+        password,
+        timeZone: browserTimeZoneAdapter.getCurrentTimeZone(),
+      })
     } catch (error: unknown) {
       if (
         error instanceof ApiError &&
@@ -75,15 +67,16 @@ export function RegistrationForm({ onRegister }: RegistrationFormProps) {
         const nextErrors = {
           email: errors.email?.[0],
           password: errors.password?.[0],
-          timeZone: errors.timeZone?.[0],
         }
         setFieldErrors(nextErrors)
         if (nextErrors.email) {
           setFieldToFocus('email')
         } else if (nextErrors.password) {
           setFieldToFocus('password')
-        } else if (nextErrors.timeZone) {
-          setFieldToFocus('timeZone')
+        } else if (errors.timeZone) {
+          setFormError(
+            'Не удалось определить параметры устройства. Повторите попытку.',
+          )
         }
       } else {
         setFormError(
@@ -181,46 +174,6 @@ export function RegistrationForm({ onRegister }: RegistrationFormProps) {
             role="alert"
           >
             {fieldErrors.password}
-          </p>
-        )}
-      </div>
-
-      <div>
-        <label
-          className="block text-sm font-medium text-slate-800"
-          htmlFor="registration-time-zone"
-        >
-          Часовая зона
-        </label>
-        <input
-          ref={timeZoneInput}
-          className="mt-2 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-base text-slate-950 outline-none transition-colors placeholder:text-slate-400 focus:border-indigo-600 focus:ring-2 focus:ring-indigo-200 disabled:cursor-not-allowed disabled:bg-slate-100"
-          id="registration-time-zone"
-          name="timeZone"
-          type="text"
-          autoComplete="off"
-          spellCheck={false}
-          required
-          disabled={isSubmitting}
-          value={timeZone}
-          aria-invalid={Boolean(fieldErrors.timeZone)}
-          aria-describedby={
-            fieldErrors.timeZone
-              ? 'registration-time-zone-help registration-time-zone-error'
-              : 'registration-time-zone-help'
-          }
-          onChange={(event) => setTimeZone(event.target.value)}
-        />
-        <p className="mt-2 text-sm text-slate-600" id="registration-time-zone-help">
-          Формат IANA, например Europe/Moscow.
-        </p>
-        {fieldErrors.timeZone && (
-          <p
-            className="mt-2 text-sm text-red-700"
-            id="registration-time-zone-error"
-            role="alert"
-          >
-            {fieldErrors.timeZone}
           </p>
         )}
       </div>

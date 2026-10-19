@@ -55,13 +55,9 @@ async function openRegistrationForm() {
 async function fillAndSubmitRegistration(
   email = 'new-user@example.com',
   password = 'correct horse battery staple',
-  timeZone = 'Europe/Moscow',
 ) {
   fireEvent.change(screen.getByLabelText('Email'), { target: { value: email } })
   fireEvent.change(screen.getByLabelText('Пароль'), { target: { value: password } })
-  fireEvent.change(screen.getByLabelText('Часовая зона'), {
-    target: { value: timeZone },
-  })
   fireEvent.click(screen.getByRole('button', { name: 'Создать аккаунт' }))
 }
 
@@ -89,7 +85,7 @@ describe('session restoration', () => {
     renderApplication()
 
     expect(await screen.findByText('user@example.com')).toBeInTheDocument()
-    expect(screen.getByText('Часовая зона: Europe/Moscow')).toBeInTheDocument()
+    expect(screen.queryByText(/Часовая зона/)).not.toBeInTheDocument()
     expect(screen.queryByText(authEnvelope.csrfToken)).not.toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/v1/me',
@@ -244,9 +240,8 @@ describe('session restoration', () => {
     renderApplication()
     await openRegistrationForm()
 
-    expect(screen.getByLabelText('Часовая зона')).toHaveValue(
-      Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
-    )
+    expect(screen.queryByLabelText('Часовая зона')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Часовая зона/)).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Войти' }))
 
     expect(await screen.findByRole('heading', { name: 'Войдите в Planly' })).toBeInTheDocument()
@@ -274,7 +269,7 @@ describe('session restoration', () => {
     expect(JSON.parse(init.body as string)).toEqual({
       email: 'new-user@example.com',
       password: 'correct horse battery staple',
-      timeZone: 'Europe/Moscow',
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     })
     expect(screen.queryByText(authEnvelope.csrfToken)).not.toBeInTheDocument()
     expect(storageSpy).not.toHaveBeenCalled()
@@ -294,7 +289,6 @@ describe('session restoration', () => {
             errors: {
               email: ['must be a valid email address'],
               password: ['must contain between 15 and 128 characters'],
-              timeZone: ['must be a valid IANA time zone'],
             },
           },
           422,
@@ -304,12 +298,35 @@ describe('session restoration', () => {
 
     renderApplication()
     await openRegistrationForm()
-    await fillAndSubmitRegistration('not-an-email', 'short', 'Mars/Olympus')
+    await fillAndSubmitRegistration('not-an-email', 'short')
 
     expect(await screen.findByText('must be a valid email address')).toBeInTheDocument()
     expect(screen.getByText('must contain between 15 and 128 characters')).toBeInTheDocument()
-    expect(screen.getByText('must be a valid IANA time zone')).toBeInTheDocument()
     expect(screen.getByLabelText('Email')).toHaveFocus()
+  })
+
+  it('uses Europe/Moscow without showing a field when browser detection fails', async () => {
+    vi.spyOn(Intl, 'DateTimeFormat').mockImplementation(() => {
+      throw new Error('time zone unavailable')
+    })
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(authenticationRequiredResponse())
+      .mockResolvedValueOnce(jsonResponse(authEnvelope, 201))
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderApplication()
+    await openRegistrationForm()
+    await fillAndSubmitRegistration()
+
+    expect(await screen.findByText('user@example.com')).toBeInTheDocument()
+    const [, init] = fetchMock.mock.calls[1]
+    expect(JSON.parse(init.body as string)).toEqual({
+      email: 'new-user@example.com',
+      password: 'correct horse battery staple',
+      timeZone: 'Europe/Moscow',
+    })
+    expect(screen.queryByText(/Часовая зона/)).not.toBeInTheDocument()
   })
 
   it('shows an email conflict next to email and focuses it', async () => {

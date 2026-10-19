@@ -4,10 +4,10 @@
 
 ## Текущий статус
 
-- Стадия: Frontend registration принят пользователем после ручной браузерной проверки.
+- Стадия: Frontend automatic time zone реализован и ожидает ручной браузерной приёмки.
 - Завершённые инкременты: MVP-контракт; Go HTTP-сервер с `GET /health`; PostgreSQL 18.6, миграция `users` и `GET /ready`; Auth foundation; session authentication и `GET /api/v1/me`; изменение часовой зоны через `PATCH /api/v1/me`; Task storage foundation; Task creation API; Task retrieval API; Task list API; Task update API; Task completion API; Task delete API; Frontend foundation; Frontend login/logout; Frontend registration.
-- Текущий инкремент: отсутствует; Frontend user time zone settings предложен для отдельного согласования.
-- Следующее действие: согласовать небольшую форму изменения IANA-таймзоны через существующие `SessionProvider` и `PATCH /api/v1/me` с session-cookie, browser Origin и CSRF из памяти.
+- Текущий инкремент: Frontend automatic time zone.
+- Следующее действие: вручную проверить регистрацию без поля часовой зоны и незаметную отправку определённой browser IANA-зоны; fallback `Europe/Moscow` покрывается автоматическим тестом.
 
 ## Предварительная последовательность
 
@@ -51,6 +51,7 @@
 - Пользователь входит по email и паролю; пароль хешируется Argon2id, а браузер использует серверную защищённую cookie-сессию сроком 30 дней.
 - Задача обязательно имеет либо точный момент `scheduled_at`, либо дату на весь день `scheduled_date`; задачи без даты и время окончания отложены.
 - Часовая зона пользователя хранится как имя IANA; точные моменты передаются в RFC 3339 и хранятся как `timestamptz`.
+- При регистрации web-клиент незаметно получает IANA-зону через browser `Intl`, а будущие Android/iOS-клиенты — через системный API устройства; общий fallback — `Europe/Moscow`. Автоматической синхронизации зоны при каждом запуске и пользовательской настройки в текущем frontend нет.
 - Продуктовый API использует префикс `/api/v1`, а ошибки — формат `application/problem+json` по RFC 9457.
 - Яндекс Алиса — будущий отдельный адаптер; идентификацию разных голосов на одной колонке нужно проверить, не считать её доказанной.
 
@@ -266,12 +267,26 @@
 
 **Цель и зачем сейчас:** завершить минимальный браузерный auth-сценарий после принятого login/logout, чтобы новый пользователь мог создать аккаунт и сразу получить действующую сессию без ручного API-запроса или перезагрузки страницы.
 
-**Результат и границы задачи:** добавлена форма регистрации с email, паролем и IANA-таймзоной, переключение между регистрацией и входом без router, обработка `validation_failed`, `email_already_registered` и сетевых ошибок, управление фокусом и защита от повторной отправки. Календарь, задачи, маршрутизация, пагинация, shadcn/ui и полноценный дизайн не добавлялись; backend API и зависимости не менялись.
+**Результат и границы задачи:** добавлена форма регистрации с email, паролем и IANA-таймзоной, переключение между регистрацией и входом без router, обработка `validation_failed`, `email_already_registered` и сетевых ошибок, управление фокусом и защита от повторной отправки. Календарь, задачи, маршрутизация, пагинация, shadcn/ui и полноценный дизайн не добавлялись; backend API и зависимости не менялись. Последующий инкремент убрал ручной ввод зоны из этой формы.
 
 **Файлы:** `web/src/features/session/RegistrationForm.tsx`; существующие session types/API/context/provider и тесты; `web/src/app/App.tsx`; `README.md`; `docs/ARCHITECTURE.md`; `docs/DEVELOPMENT_PLAN.md`.
 
-**Архитектурные решения:** `SessionProvider` вызывает существующий `POST /api/v1/auth/register` и после `201` сохраняет `user` и `csrfToken` только в памяти, используя тот же authenticated-state, что и login. `credentials: "include"` позволяет браузеру принять HttpOnly session-cookie, а browser `Origin` проверяется backend. Часовая зона лениво предзаполняется через `Intl.DateTimeFormat().resolvedOptions().timeZone`, остаётся редактируемой, и backend остаётся источником истины для IANA-валидации. Пароль и токены не записываются в web storage.
+**Архитектурные решения:** `SessionProvider` вызывает существующий `POST /api/v1/auth/register` и после `201` сохраняет `user` и `csrfToken` только в памяти, используя тот же authenticated-state, что и login. `credentials: "include"` позволяет браузеру принять HttpOnly session-cookie, а browser `Origin` проверяется backend. В исходной версии часовая зона предзаполнялась через `Intl.DateTimeFormat().resolvedOptions().timeZone`; последующий инкремент заменил это на невидимый платформенный adapter. Пароль и токены не записываются в web storage.
 
 **Проверка и критерии готовности:** тесты покрывают переключение форм, browser time zone, точный registration payload, `201` без перезагрузки, хранение auth-envelope только в памяти, полевые validation errors и фокус, конфликт email, сетевую ошибку и повторную отправку. Требуются успешные frontend lint/test/build, стандартные Go-проверки, Compose и ручная браузерная приёмка регистрации и восстановления сессии.
 
 **Статус:** принят пользователем после ручной браузерной проверки регистрации, серверной валидации, конфликта email, восстановления сессии после перезагрузки и сетевой ошибки.
+
+### Frontend automatic time zone
+
+**Цель и зачем сейчас:** убрать технический выбор часовой зоны из регистрации и authenticated-интерфейса, сохранив существующий backend-контракт и простое кроссплатформенное правило.
+
+**Результат и границы задачи:** регистрация незаметно отправляет IANA-зону из browser `Intl`; при невозможности определения используется `Europe/Moscow`. Пользователь не видит, не вводит и не изменяет зону. Frontend не вызывает существующий `PATCH /api/v1/me` и не синхронизирует значение при каждом запуске. Backend API, зависимости, календарь, задачи в UI, router, пагинация, shadcn/ui и полноценный дизайн не менялись.
+
+**Файлы:** `web/src/features/session/time-zone.ts`; `RegistrationForm.tsx`; существующие session types/API/context/provider и тесты; `web/src/app/App.tsx`; `AGENTS.md`; `README.md`; `docs/PROJECT.md`; `docs/ARCHITECTURE.md`; `docs/DEVELOPMENT_PLAN.md`.
+
+**Архитектурные решения:** browser adapter изолирует платформенный API от формы и вычисляет зону только в момент регистрации. Будущие Android/iOS-клиенты получат IANA-зону через системный API устройства и применят тот же fallback `Europe/Moscow`. Backend продолжает хранить и валидировать IANA-зону, а `PATCH /api/v1/me` сохраняется для будущих клиентов, хотя текущий frontend его не использует. Рекомендация `ui-ux-pro-max` применена как progressive disclosure в предельной форме: полностью скрыть автоматически определяемый технический параметр и не перегружать регистрацию.
+
+**Проверка и критерии готовности:** frontend-тесты проверяют определённую browser-зону в registration payload, fallback `Europe/Moscow`, отсутствие элементов зоны в registration/authenticated UI и сохранение прежних auth-сценариев. Требуются успешные frontend lint/test/build, стандартные Go-проверки, Compose и ручная браузерная приёмка на `http://localhost:5173`.
+
+**Статус:** реализован; ожидает ручной браузерной приёмки пользователем.
