@@ -25,14 +25,19 @@ function jsonResponse(body: unknown, status = 200) {
   })
 }
 
-function renderForm(onAuthenticationRequired = vi.fn()) {
+function renderForm(
+  onAuthenticationRequired = vi.fn(),
+  onTaskCreated = vi.fn(),
+) {
   render(
     <TaskCreateForm
       csrfToken="csrf-token-kept-in-memory"
+      timeZone="Europe/Moscow"
       onAuthenticationRequired={onAuthenticationRequired}
+      onTaskCreated={onTaskCreated}
     />,
   )
-  return onAuthenticationRequired
+  return { onAuthenticationRequired, onTaskCreated }
 }
 
 function timedInput() {
@@ -63,7 +68,7 @@ describe('TaskCreateForm', () => {
   it('creates a timed task with cookie credentials and in-memory CSRF', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(timedTask, 201))
     vi.stubGlobal('fetch', fetchMock)
-    renderForm()
+    const { onTaskCreated } = renderForm()
     fillTimedTask()
 
     fireEvent.click(screen.getByRole('button', { name: 'Создать задачу' }))
@@ -88,6 +93,7 @@ describe('TaskCreateForm', () => {
       },
     })
     expect(init.body as string).not.toContain('userId')
+    expect(onTaskCreated).toHaveBeenCalledWith(timedTask)
     expect(screen.getByLabelText('Название')).toHaveValue('')
     expect(screen.getByLabelText('Название')).toHaveFocus()
   })
@@ -224,7 +230,7 @@ describe('TaskCreateForm', () => {
       ),
     )
     vi.stubGlobal('fetch', fetchMock)
-    const onAuthenticationRequired = renderForm()
+    const { onAuthenticationRequired } = renderForm()
     fillTimedTask()
 
     fireEvent.click(screen.getByRole('button', { name: 'Создать задачу' }))

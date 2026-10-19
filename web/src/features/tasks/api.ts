@@ -1,5 +1,10 @@
 import { request } from '../../shared/api/client'
-import type { CreateTaskInput, Task } from './types'
+import type {
+  CreateTaskInput,
+  Task,
+  TaskListRange,
+  TaskListResponse,
+} from './types'
 
 export function createTask(
   input: CreateTaskInput,
@@ -13,4 +18,13 @@ export function createTask(
     },
     body: JSON.stringify(input),
   })
+}
+
+export function listTasks(
+  range: TaskListRange,
+  signal?: AbortSignal,
+): Promise<TaskListResponse> {
+  const query = new URLSearchParams({ from: range.from, to: range.to })
+
+  return request<TaskListResponse>(`/tasks?${query.toString()}`, { signal })
 }

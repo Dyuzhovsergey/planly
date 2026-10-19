@@ -26,3 +26,12 @@ export interface CreateTaskInput {
   description: string
   schedule: TaskSchedule
 }
+
+export interface TaskListRange {
+  from: string
+  to: string
+}
+
+export interface TaskListResponse {
+  items: Task[]
+}

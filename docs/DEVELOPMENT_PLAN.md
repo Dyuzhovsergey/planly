@@ -4,10 +4,10 @@
 
 ## Текущий статус
 
-- Стадия: Frontend task creation UI принят; планируется read-only список задач текущего месяца.
+- Стадия: Frontend task list foundation реализован и ожидает ручной браузерной приёмки.
 - Завершённые инкременты: MVP-контракт; Go HTTP-сервер с `GET /health`; PostgreSQL 18.6, миграция `users` и `GET /ready`; Auth foundation; session authentication и `GET /api/v1/me`; изменение часовой зоны через `PATCH /api/v1/me`; Task storage foundation; Task creation API; Task retrieval API; Task list API; Task update API; Task completion API; Task delete API; Frontend foundation; Frontend login/logout; Frontend registration; Frontend automatic time zone; Frontend task creation UI.
-- Текущий инкремент: отсутствует; следующий Frontend task list foundation предложен к согласованию.
-- Следующее действие: согласовать Frontend task list foundation с типизированным `GET /api/v1/tasks`, диапазоном текущего месяца в IANA-зоне пользователя и read-only состояниями списка.
+- Текущий инкремент: Frontend task list foundation.
+- Следующее действие: вручную проверить loading, empty, error/retry, loaded, отображение timed/all-day задач и обновление списка после создания; после приёмки выбрать следующий небольшой frontend-инкремент.
 
 ## Предварительная последовательность
 
@@ -304,3 +304,17 @@
 **Проверка и критерии готовности:** frontend-тесты покрывают timed/all-day payload, cookie/CSRF, отсутствие `userId`, локальную и серверную валидацию, focus management, `401`, `403`, network retry, блокировку повторной отправки и преобразование дат. Требуются успешные frontend lint/test/build, стандартные Go-проверки, Compose и ручная браузерная приёмка на `http://localhost:5173`.
 
 **Статус:** принят пользователем после ручной браузерной проверки timed/all-day задач, подтверждения успеха, очистки формы, клиентской валидации и отсутствия `userId` в payload.
+
+### Frontend task list foundation
+
+**Цель и зачем сейчас:** связать принятый task API с первым read-only представлением задач до календарной сетки и изменяющих действий во frontend.
+
+**Результат и границы задачи:** authenticated-интерфейс загружает задачи текущего календарного месяца через типизированный `GET /api/v1/tasks?from=&to=` и показывает отдельные loading, empty, error с retry и loaded состояния. После успешного создания список перечитывается. Изменение, завершение, удаление, календарная сетка, router, пагинация и полноценный дизайн не добавлялись; backend API и зависимости не менялись.
+
+**Файлы:** `web/src/features/tasks/types.ts`, `api.ts`, `calendar-range.ts`, `date-time.ts`, `TaskList.tsx`, `TaskCreateForm.tsx` и тесты; `web/src/app/App.tsx`; session integration-тест; `README.md`; `docs/ARCHITECTURE.md`; `docs/DEVELOPMENT_PLAN.md`.
+
+**Архитектурные решения:** frontend вычисляет включительную границу `from` и исключительную `to` по текущему месяцу в `User.timeZone`, но не передаёт в API ни зону, ни `userId`: backend повторно получает их из session identity. GET использует только session-cookie без Origin и CSRF. `AbortController` прекращает устаревший запрос; `401` запускает существующую проверку сессии. Timed-значения форматируются в зоне пользователя, all-day даты не преобразуются через UTC, а порядок элементов остаётся серверным. Локальный revision после создания заменяет преждевременный глобальный task-store.
+
+**Проверка и критерии готовности:** unit-тесты покрывают IANA-границы месяца и переход года; component-тесты — точный URL, cookie без CSRF, loading/empty/error/retry/loaded, `401`, abort, серверный порядок, явный статус, timed/all-day форматирование и перечитывание по revision. Требуются успешные frontend lint/test/build, стандартные Go-проверки, Compose и ручная браузерная приёмка.
+
+**Статус:** принят как техническая основа следующего календарного интерфейса; загрузка диапазона, состояния списка и обновление после создания сохраняются при переходе к dashboard.

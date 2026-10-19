@@ -23,7 +23,19 @@ describe('task date and time helpers', () => {
 
   it('formats an all-day date without converting it through UTC', () => {
     expect(
-      formatTaskSchedule({ type: 'allDay', date: '2026-10-25' }),
+      formatTaskSchedule(
+        { type: 'allDay', date: '2026-10-25' },
+        'Pacific/Pago_Pago',
+      ),
     ).toBe('25.10.2026, весь день')
+  })
+
+  it('formats a timed task in the explicit user time zone', () => {
+    expect(
+      formatTaskSchedule(
+        { type: 'timed', at: '2026-10-20T15:30:00Z' },
+        'Europe/Moscow',
+      ),
+    ).toContain('18:30')
   })
 })

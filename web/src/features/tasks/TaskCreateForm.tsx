@@ -7,7 +7,9 @@ import type { CreateTaskInput, Task, TaskSchedule } from './types'
 
 interface TaskCreateFormProps {
   csrfToken: string
+  timeZone: string
   onAuthenticationRequired: () => void
+  onTaskCreated: (task: Task) => void
 }
 
 type ScheduleType = TaskSchedule['type']
@@ -21,7 +23,9 @@ interface FieldErrors {
 
 export function TaskCreateForm({
   csrfToken,
+  timeZone,
   onAuthenticationRequired,
+  onTaskCreated,
 }: TaskCreateFormProps) {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -112,6 +116,7 @@ export function TaskCreateForm({
     try {
       const created = await createTask(input, csrfToken)
       setCreatedTask(created)
+      onTaskCreated(created)
       setTitle('')
       setDescription('')
       setScheduledAt('')
@@ -349,7 +354,7 @@ export function TaskCreateForm({
             <p className="font-medium">Задача создана</p>
             <p className="mt-1">{createdTask.title}</p>
             <p className="mt-1 text-emerald-800">
-              {formatTaskSchedule(createdTask.schedule)}
+              {formatTaskSchedule(createdTask.schedule, timeZone)}
             </p>
           </div>
         )}

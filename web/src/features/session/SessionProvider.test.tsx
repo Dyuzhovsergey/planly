@@ -4,6 +4,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { App } from '../../app/App'
 import { SessionProvider } from './SessionProvider'
 
+vi.mock('../tasks/TaskList', () => ({ TaskList: () => null }))
+
 const authEnvelope = {
   user: {
     id: 'user-id',

@@ -4,6 +4,7 @@ import { LoginForm } from '../features/session/LoginForm'
 import { RegistrationForm } from '../features/session/RegistrationForm'
 import { useSession } from '../features/session/session-context'
 import { TaskCreateForm } from '../features/tasks/TaskCreateForm'
+import { TaskList } from '../features/tasks/TaskList'
 
 type AuthMode = 'login' | 'registration'
 
@@ -12,6 +13,7 @@ export function App() {
   const [authMode, setAuthMode] = useState<AuthMode>('login')
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [logoutError, setLogoutError] = useState(false)
+  const [taskListRevision, setTaskListRevision] = useState(0)
 
   async function handleLogout() {
     if (isLoggingOut) {
@@ -56,6 +58,15 @@ export function App() {
             <p className="mt-1 font-medium text-slate-950">{state.user.email}</p>
             <TaskCreateForm
               csrfToken={state.csrfToken}
+              timeZone={state.user.timeZone}
+              onAuthenticationRequired={retry}
+              onTaskCreated={() =>
+                setTaskListRevision((current) => current + 1)
+              }
+            />
+            <TaskList
+              timeZone={state.user.timeZone}
+              refreshKey={taskListRevision}
               onAuthenticationRequired={retry}
             />
             {logoutError && (

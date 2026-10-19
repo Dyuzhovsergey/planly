@@ -23,17 +23,17 @@ export function localDateTimeToRFC3339(value: string): string | null {
   return parsed.toISOString()
 }
 
-export function formatTaskSchedule(schedule: {
-  type: 'timed'
-  at: string
-} | {
-  type: 'allDay'
-  date: string
-}): string {
+export function formatTaskSchedule(
+  schedule:
+    | { type: 'timed'; at: string }
+    | { type: 'allDay'; date: string },
+  timeZone: string,
+): string {
   if (schedule.type === 'timed') {
     return new Intl.DateTimeFormat('ru-RU', {
       dateStyle: 'long',
       timeStyle: 'short',
+      timeZone,
     }).format(new Date(schedule.at))
   }
 
