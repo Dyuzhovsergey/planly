@@ -410,6 +410,32 @@ describe('session restoration', () => {
     expect(screen.getByRole('button', { name: 'Выйти' })).toBeEnabled()
   })
 
+  it('returns to login when task creation finds an expired session', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(authEnvelope))
+      .mockResolvedValueOnce(authenticationRequiredResponse())
+      .mockResolvedValueOnce(authenticationRequiredResponse())
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderApplication()
+    await screen.findByText('user@example.com')
+    fireEvent.change(screen.getByLabelText('Название'), {
+      target: { value: 'Позвонить врачу' },
+    })
+    fireEvent.change(
+      screen.getByLabelText('Дата и время', {
+        selector: 'input[type="datetime-local"]',
+      }),
+      { target: { value: '2026-10-20T18:30' } },
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Создать задачу' }))
+
+    expect(await screen.findByRole('button', { name: 'Войти' })).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+    expect(fetchMock.mock.calls[2][0]).toBe('/api/v1/me')
+  })
+
   it('clears local session state when logout reports an expired session', async () => {
     const fetchMock = vi
       .fn()

@@ -4,10 +4,10 @@
 
 ## Текущий статус
 
-- Стадия: Frontend automatic time zone принят пользователем после ручной браузерной проверки.
-- Завершённые инкременты: MVP-контракт; Go HTTP-сервер с `GET /health`; PostgreSQL 18.6, миграция `users` и `GET /ready`; Auth foundation; session authentication и `GET /api/v1/me`; изменение часовой зоны через `PATCH /api/v1/me`; Task storage foundation; Task creation API; Task retrieval API; Task list API; Task update API; Task completion API; Task delete API; Frontend foundation; Frontend login/logout; Frontend registration; Frontend automatic time zone.
-- Текущий инкремент: отсутствует; Frontend task creation UI предложен для отдельного согласования.
-- Следующее действие: согласовать форму создания timed/all-day задачи через существующий `POST /api/v1/tasks`; Frontend task list foundation выполнить следующим отдельным инкрементом.
+- Стадия: Frontend task creation UI принят; планируется read-only список задач текущего месяца.
+- Завершённые инкременты: MVP-контракт; Go HTTP-сервер с `GET /health`; PostgreSQL 18.6, миграция `users` и `GET /ready`; Auth foundation; session authentication и `GET /api/v1/me`; изменение часовой зоны через `PATCH /api/v1/me`; Task storage foundation; Task creation API; Task retrieval API; Task list API; Task update API; Task completion API; Task delete API; Frontend foundation; Frontend login/logout; Frontend registration; Frontend automatic time zone; Frontend task creation UI.
+- Текущий инкремент: отсутствует; следующий Frontend task list foundation предложен к согласованию.
+- Следующее действие: согласовать Frontend task list foundation с типизированным `GET /api/v1/tasks`, диапазоном текущего месяца в IANA-зоне пользователя и read-only состояниями списка.
 
 ## Предварительная последовательность
 
@@ -290,3 +290,17 @@
 **Проверка и критерии готовности:** frontend-тесты проверяют определённую browser-зону в registration payload, fallback `Europe/Moscow`, отсутствие элементов зоны в registration/authenticated UI и сохранение прежних auth-сценариев. Требуются успешные frontend lint/test/build, стандартные Go-проверки, Compose и ручная браузерная приёмка на `http://localhost:5173`.
 
 **Статус:** принят пользователем после ручной браузерной проверки регистрации без видимых полей и настроек часовой зоны.
+
+### Frontend task creation UI
+
+**Цель и зачем сейчас:** добавить первый продуктовый write-flow во frontend поверх принятого защищённого `POST /api/v1/tasks`, чтобы пользователь мог создавать задачи до появления списка и календарной сетки.
+
+**Результат и границы задачи:** authenticated-интерфейс получил форму с title, необязательным description, выбором timed/all-day и соответствующим `datetime-local` или `date`. После `201` форма показывает публичную созданную Task, очищается и возвращает фокус в title. Список, изменение, завершение и удаление задач, календарная сетка, router, пагинация, shadcn/ui и полноценный дизайн не добавлялись; backend API, зависимости и БД не менялись.
+
+**Файлы:** `web/src/features/tasks/types.ts`, `api.ts`, `date-time.ts`, `TaskCreateForm.tsx` и тесты; `web/src/app/App.tsx`; `README.md`; `docs/ARCHITECTURE.md`; `docs/DEVELOPMENT_PLAN.md`.
+
+**Архитектурные решения:** task feature использует общий `fetch` client с `credentials: "include"`; browser формирует Origin, а `X-CSRF-Token` передаётся только из authenticated-состояния. Клиентский payload не содержит `userId`, поэтому backend по-прежнему получает владельца только из session identity. `datetime-local` проверяется обратным сравнением календарных частей и преобразуется из локального времени устройства в UTC RFC 3339, а all-day дата не проходит через UTC. `validation_failed` отображается рядом с полями; `401` запускает существующую повторную проверку сессии, `403` и network errors сохраняют введённые значения. Рекомендации `ui-ux-pro-max` применены к labels, focus states, touch targets и явным loading/success/error состояниям без редизайна приложения.
+
+**Проверка и критерии готовности:** frontend-тесты покрывают timed/all-day payload, cookie/CSRF, отсутствие `userId`, локальную и серверную валидацию, focus management, `401`, `403`, network retry, блокировку повторной отправки и преобразование дат. Требуются успешные frontend lint/test/build, стандартные Go-проверки, Compose и ручная браузерная приёмка на `http://localhost:5173`.
+
+**Статус:** принят пользователем после ручной браузерной проверки timed/all-day задач, подтверждения успеха, очистки формы, клиентской валидации и отсутствия `userId` в payload.

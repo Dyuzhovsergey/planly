@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { LoginForm } from '../features/session/LoginForm'
 import { RegistrationForm } from '../features/session/RegistrationForm'
 import { useSession } from '../features/session/session-context'
+import { TaskCreateForm } from '../features/tasks/TaskCreateForm'
 
 type AuthMode = 'login' | 'registration'
 
@@ -53,6 +54,10 @@ export function App() {
           <div className="mt-6" aria-live="polite">
             <p className="text-slate-700">Вы вошли как</p>
             <p className="mt-1 font-medium text-slate-950">{state.user.email}</p>
+            <TaskCreateForm
+              csrfToken={state.csrfToken}
+              onAuthenticationRequired={retry}
+            />
             {logoutError && (
               <p className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-800" role="alert">
                 Не удалось выйти. Проверьте соединение и повторите попытку.
