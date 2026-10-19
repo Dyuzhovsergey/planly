@@ -4,10 +4,10 @@
 
 ## Текущий статус
 
-- Стадия: Frontend automatic time zone реализован и ожидает ручной браузерной приёмки.
-- Завершённые инкременты: MVP-контракт; Go HTTP-сервер с `GET /health`; PostgreSQL 18.6, миграция `users` и `GET /ready`; Auth foundation; session authentication и `GET /api/v1/me`; изменение часовой зоны через `PATCH /api/v1/me`; Task storage foundation; Task creation API; Task retrieval API; Task list API; Task update API; Task completion API; Task delete API; Frontend foundation; Frontend login/logout; Frontend registration.
-- Текущий инкремент: Frontend automatic time zone.
-- Следующее действие: вручную проверить регистрацию без поля часовой зоны и незаметную отправку определённой browser IANA-зоны; fallback `Europe/Moscow` покрывается автоматическим тестом.
+- Стадия: Frontend automatic time zone принят пользователем после ручной браузерной проверки.
+- Завершённые инкременты: MVP-контракт; Go HTTP-сервер с `GET /health`; PostgreSQL 18.6, миграция `users` и `GET /ready`; Auth foundation; session authentication и `GET /api/v1/me`; изменение часовой зоны через `PATCH /api/v1/me`; Task storage foundation; Task creation API; Task retrieval API; Task list API; Task update API; Task completion API; Task delete API; Frontend foundation; Frontend login/logout; Frontend registration; Frontend automatic time zone.
+- Текущий инкремент: отсутствует; Frontend task creation UI предложен для отдельного согласования.
+- Следующее действие: согласовать форму создания timed/all-day задачи через существующий `POST /api/v1/tasks`; Frontend task list foundation выполнить следующим отдельным инкрементом.
 
 ## Предварительная последовательность
 
@@ -289,4 +289,4 @@
 
 **Проверка и критерии готовности:** frontend-тесты проверяют определённую browser-зону в registration payload, fallback `Europe/Moscow`, отсутствие элементов зоны в registration/authenticated UI и сохранение прежних auth-сценариев. Требуются успешные frontend lint/test/build, стандартные Go-проверки, Compose и ручная браузерная приёмка на `http://localhost:5173`.
 
-**Статус:** реализован; ожидает ручной браузерной приёмки пользователем.
+**Статус:** принят пользователем после ручной браузерной проверки регистрации без видимых полей и настроек часовой зоны.
