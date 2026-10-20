@@ -263,6 +263,7 @@ describe('session restoration', () => {
     renderApplication()
     await openRegistrationForm()
 
+    expect(screen.getByText('От 8 до 128 символов.')).toBeInTheDocument()
     expect(screen.queryByLabelText('Часовая зона')).not.toBeInTheDocument()
     expect(screen.queryByText(/Часовая зона/)).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Войти' }))
@@ -281,7 +282,7 @@ describe('session restoration', () => {
 
     renderApplication()
     await openRegistrationForm()
-    await fillAndSubmitRegistration()
+    await fillAndSubmitRegistration('new-user@example.com', '12345678')
 
     expect(await screen.findByText('user@example.com')).toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledTimes(2)
@@ -291,7 +292,7 @@ describe('session restoration', () => {
     expect(new Headers(init.headers).get('Content-Type')).toBe('application/json')
     expect(JSON.parse(init.body as string)).toEqual({
       email: 'new-user@example.com',
-      password: 'correct horse battery staple',
+      password: '12345678',
       timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     })
     expect(screen.queryByText(authEnvelope.csrfToken)).not.toBeInTheDocument()
@@ -311,7 +312,7 @@ describe('session restoration', () => {
             code: 'validation_failed',
             errors: {
               email: ['must be a valid email address'],
-              password: ['must contain between 15 and 128 characters'],
+              password: ['must contain between 8 and 128 characters'],
             },
           },
           422,
@@ -324,7 +325,7 @@ describe('session restoration', () => {
     await fillAndSubmitRegistration('not-an-email', 'short')
 
     expect(await screen.findByText('must be a valid email address')).toBeInTheDocument()
-    expect(screen.getByText('must contain between 15 and 128 characters')).toBeInTheDocument()
+    expect(screen.getByText('must contain between 8 and 128 characters')).toBeInTheDocument()
     expect(screen.getByLabelText('Email')).toHaveFocus()
   })
 

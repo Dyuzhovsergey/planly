@@ -165,7 +165,7 @@ export function RegistrationForm({ onRegister }: RegistrationFormProps) {
           onChange={(event) => setPassword(event.target.value)}
         />
         <p className="mt-2 text-sm text-slate-600" id="registration-password-help">
-          От 15 до 128 символов.
+          От 8 до 128 символов.
         </p>
         {fieldErrors.password && (
           <p

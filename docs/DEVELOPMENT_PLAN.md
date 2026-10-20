@@ -4,10 +4,10 @@
 
 ## Текущий статус
 
-- Стадия: Frontend calendar dashboard и перенос задач приняты пользователем.
-- Завершённые инкременты: MVP-контракт; Go HTTP-сервер с `GET /health`; PostgreSQL 18.6, миграция `users` и `GET /ready`; Auth foundation; session authentication и `GET /api/v1/me`; изменение часовой зоны через `PATCH /api/v1/me`; Task storage foundation; Task creation API; Task retrieval API; Task list API; Task update API; Task completion API; Task delete API; Frontend foundation; Frontend login/logout; Frontend registration; Frontend automatic time zone; Frontend task creation UI; Frontend task list foundation; Frontend calendar dashboard and task rescheduling.
-- Текущий инкремент: отсутствует; следующий инкремент находится на этапе проектирования.
-- Следующее действие: согласовать Frontend task completion UI и отдельно синхронное снижение минимальной длины пароля с 15 до 8 символов во всех слоях.
+- Стадия: Password policy 8–128 и Frontend task completion UI приняты пользователем.
+- Завершённые инкременты: MVP-контракт; Go HTTP-сервер с `GET /health`; PostgreSQL 18.6, миграция `users` и `GET /ready`; Auth foundation; session authentication и `GET /api/v1/me`; изменение часовой зоны через `PATCH /api/v1/me`; Task storage foundation; Task creation API; Task retrieval API; Task list API; Task update API; Task completion API; Task delete API; Frontend foundation; Frontend login/logout; Frontend registration; Frontend automatic time zone; Frontend task creation UI; Frontend task list foundation; Frontend calendar dashboard and task rescheduling; Password policy 8–128; Frontend task completion UI.
+- Текущий инкремент: отсутствует; следующим предлагается Frontend task delete UI.
+- Следующее действие: согласовать небольшой инкремент удаления задачи из agenda через существующий `DELETE /api/v1/tasks/{id}` с обязательным подтверждением.
 
 ## Предварительная последовательность
 
@@ -16,7 +16,7 @@
 - [x] Подключить PostgreSQL и базовые миграции; добавить `/ready` с проверкой доступности БД.
 - [x] Реализовать пользователей и аутентификацию (Auth foundation, session authentication, `GET /me` и `PATCH /me` приняты).
 - [x] Реализовать защищённое хранилище задач и обязательную серверную изоляцию пользовательских данных (storage, создание, получение, список, изменение, завершение и удаление приняты пользователем).
-- [ ] Создать React + TypeScript + Vite UI с Tailwind CSS + shadcn/ui (foundation, auth UI, task creation/list и календарный dashboard без shadcn/ui реализованы; completion/delete UI ещё не реализован).
+- [ ] Создать React + TypeScript + Vite UI с Tailwind CSS + shadcn/ui (foundation, auth UI, task creation/list, календарный dashboard и completion UI без shadcn/ui приняты; delete UI ещё не реализован).
 - [x] Выбрать FullCalendar Standard v7 и реализовать виды месяц / неделя / день с переносом активных задач.
 - [ ] Дополнить Docker Compose контейнерами приложения и настроить безопасное веб-развёртывание.
 - [ ] Отдельно спроектировать и проверить интеграцию с Яндекс Алисой.
@@ -334,3 +334,29 @@
 **Риски / вопросы:** native drag-and-drop и `datetime-local` различаются между browser и touch-устройствами, поэтому их необходимо проверить вручную; форма переноса остаётся обязательной доступной альтернативой.
 
 **Статус:** принят пользователем после ручной проверки адаптивности на 375/768/1024/1440 px, создания timed/all-day задач, переключения видов и сохранения переноса после перезагрузки.
+
+### Password policy 8–128
+
+**Цель и зачем сейчас:** снизить минимальную длину пароля регистрации с 15 до 8 символов по согласованному продуктовому решению, сохранив единое правило во всех слоях.
+
+**Результат и границы задачи:** backend принимает пароль длиной от 8 до 128 Unicode-символов; обязательные классы символов не добавлены. Подсказка registration UI, API-документация и сообщения тестов синхронизированы. Argon2id, login, существующие хеши и сессии не изменены; миграция не требуется.
+
+**Файлы:** `internal/auth/service.go`, `service_test.go`; `web/src/features/session/RegistrationForm.tsx`, `SessionProvider.test.tsx`; `docs/API.md`; `docs/DEVELOPMENT_PLAN.md`.
+
+**Проверка и критерии готовности:** unit-тест проверяет границы 7/8/128/129; frontend-тест подтверждает обновлённую серверную ошибку и подсказку. Требуются полные Go/frontend-проверки и ручная регистрация с восьмисимвольным паролем.
+
+**Статус:** принят пользователем после ручной регистрации с восьмисимвольным паролем.
+
+### Frontend task completion UI
+
+**Цель и зачем сейчас:** дать пользователю завершать и повторно открывать задачи из agenda без отдельного экрана и без изменения backend-контракта.
+
+**Результат и границы задачи:** каждая agenda-задача получила отдельное от переноса действие «Завершить» или «Открыть повторно». Запрос ждёт подтверждённую сервером Task, после чего dashboard одновременно обновляет agenda и календарь. Завершённое событие приглушается и остаётся недоступным для переноса. Delete, изменение title/description, пагинация и router не добавлялись; backend, БД, миграции и зависимости не менялись.
+
+**Файлы:** `web/src/features/tasks/TaskCompletionControl.tsx`, `TaskAgenda.tsx`, `TaskCalendarDashboard.tsx` и тесты; `web/src/shared/ui/icons.tsx`; `README.md`; `docs/ARCHITECTURE.md`; `docs/DEVELOPMENT_PLAN.md`.
+
+**Архитектурные решения:** completion control использует существующий типизированный `updateTask` и отправляет только `completed`, session-cookie и CSRF из памяти; `userId` отсутствует. Локальное ожидание блокирует двойное нажатие. `401` запускает восстановление сессии, `403` и network error показываются через доступный alert и не меняют прежний статус. Отдельная кнопка статуса не конфликтует с действием переноса; текст и SVG-иконка не полагаются только на цвет.
+
+**Проверка и критерии готовности:** тесты покрывают completion/reopen payload, CSRF, отсутствие `userId`, блокировку повторной отправки, `401`, `403`, network error, синхронное обновление agenda/календаря и сохранение блокировки drag для завершённого события. Требуются полные frontend/Go/Compose-проверки и ручная браузерная приёмка.
+
+**Статус:** принят пользователем после ручной проверки завершения, сохранения статуса после перезагрузки, повторного открытия и поведения при сетевой ошибке.

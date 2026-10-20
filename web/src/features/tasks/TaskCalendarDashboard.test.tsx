@@ -6,7 +6,7 @@ import type { Task } from './types'
 
 interface CalendarMockProps {
   initialView: string
-  events: Array<{ id?: string }>
+  events: Array<{ id?: string; startEditable?: boolean }>
   datesSet: (info: { start: Date; end: Date }) => void
   eventDrop: (info: unknown) => void
 }
@@ -21,6 +21,9 @@ vi.mock('@fullcalendar/react', () => ({
     calendarHarness.props = props
     return (
       <div data-testid="calendar" data-view={props.initialView}>
+        <output data-testid="calendar-task-editable">
+          {String(props.events[0]?.startEditable ?? '')}
+        </output>
         <button
           type="button"
           onClick={() => props.datesSet({
@@ -165,6 +168,31 @@ describe('TaskCalendarDashboard', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Задача возвращена')
     expect(calendarHarness.revert).toHaveBeenCalledOnce()
+  })
+
+  it('updates the agenda and calendar after completing a task', async () => {
+    const completed = {
+      ...task,
+      completed: true,
+      completedAt: '2026-10-20T16:00:00Z',
+      updatedAt: '2026-10-20T16:00:00Z',
+    }
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ items: [task] }))
+      .mockResolvedValueOnce(jsonResponse(completed))
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderDashboard()
+    fireEvent.click(screen.getByRole('button', { name: 'Показать диапазон' }))
+    await screen.findByText('Позвонить врачу')
+    expect(screen.getByTestId('calendar-task-editable')).toHaveTextContent('true')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Завершить задачу Позвонить врачу' }))
+
+    expect(await screen.findByRole('button', { name: 'Открыть повторно задачу Позвонить врачу' })).toBeInTheDocument()
+    expect(screen.getByTestId('calendar-task-editable')).toHaveTextContent('false')
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body as string)).toEqual({ completed: true })
   })
 
   it('uses a day calendar on narrow screens', () => {

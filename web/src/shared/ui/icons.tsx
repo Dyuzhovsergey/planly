@@ -52,3 +52,11 @@ export function CheckIcon({ className = 'size-5' }: IconProps) {
     </svg>
   )
 }
+
+export function ReopenIcon({ className = 'size-5' }: IconProps) {
+  return (
+    <svg {...common} className={className}>
+      <path d="M4 9V4m0 0h5M4 4l4 4a7 7 0 1 1-2 7" />
+    </svg>
+  )
+}

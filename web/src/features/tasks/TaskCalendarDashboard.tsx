@@ -111,7 +111,7 @@ export function TaskCalendarDashboard({
           items: current.items.map((task) => task.id === updated.id ? updated : task),
         }
       : current)
-    setSelectedTask(updated)
+    setSelectedTask((current) => current?.id === updated.id ? updated : current)
     setMutationError(null)
   }
 
@@ -268,9 +268,15 @@ export function TaskCalendarDashboard({
           tasks={tasks}
           timeZone={timeZone}
           title={agendaTitle}
+          csrfToken={csrfToken}
+          onAuthenticationRequired={onAuthenticationRequired}
           onSelectTask={(task) => {
             setSelectedTask(task)
             setIsCreateOpen(false)
+          }}
+          onTaskUpdated={(updated) => {
+            replaceTask(updated)
+            setSelectedTask(null)
           }}
         />
       </aside>

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 )
@@ -120,6 +121,29 @@ func TestRegisterValidatesInput(t *testing.T) {
 		if len(validationErr.Fields[field]) == 0 {
 			t.Errorf("missing validation error for %s", field)
 		}
+	}
+}
+
+func TestRegistrationPasswordLengthBoundaries(t *testing.T) {
+	tests := []struct {
+		name      string
+		password  string
+		wantError bool
+	}{
+		{name: "seven characters", password: strings.Repeat("a", 7), wantError: true},
+		{name: "eight characters", password: strings.Repeat("a", 8)},
+		{name: "one hundred twenty eight characters", password: strings.Repeat("a", 128)},
+		{name: "one hundred twenty nine characters", password: strings.Repeat("a", 129), wantError: true},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			validationErr := validateRegistration("user@example.com", test.password, "Europe/Moscow")
+			hasPasswordError := validationErr != nil && len(validationErr.Fields["password"]) != 0
+			if hasPasswordError != test.wantError {
+				t.Errorf("password validation error = %v, want error %v", hasPasswordError, test.wantError)
+			}
+		})
 	}
 }
 

@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	minimumPasswordLength = 15
+	minimumPasswordLength = 8
 	maximumPasswordLength = 128
 	maximumEmailLength    = 254
 	sessionLifetime       = 30 * 24 * time.Hour
@@ -234,7 +234,7 @@ func validateRegistration(email, password, timeZone string) *ValidationError {
 		fields["email"] = []string{"must be a valid email address"}
 	}
 	if length := len([]rune(password)); length < minimumPasswordLength || length > maximumPasswordLength {
-		fields["password"] = []string{"must contain between 15 and 128 characters"}
+		fields["password"] = []string{"must contain between 8 and 128 characters"}
 	}
 	if !isValidTimeZone(timeZone) {
 		fields["timeZone"] = []string{"must be a valid IANA time zone"}

@@ -1,19 +1,26 @@
 import { CheckIcon, ClockIcon } from '../../shared/ui/icons'
 import { formatTaskSchedule } from './date-time'
+import { TaskCompletionControl } from './TaskCompletionControl'
 import type { Task } from './types'
 
 interface TaskAgendaProps {
   tasks: Task[]
   timeZone: string
   title: string
+  csrfToken: string
+  onAuthenticationRequired: () => void
   onSelectTask: (task: Task) => void
+  onTaskUpdated: (task: Task) => void
 }
 
 export function TaskAgenda({
   tasks,
   timeZone,
   title,
+  csrfToken,
+  onAuthenticationRequired,
   onSelectTask,
+  onTaskUpdated,
 }: TaskAgendaProps) {
   return (
     <section className="planly-card p-5" aria-labelledby="task-agenda-title">
@@ -38,9 +45,9 @@ export function TaskAgenda({
           {tasks.slice(0, 8).map((task) => {
             const Icon = task.completed ? CheckIcon : ClockIcon
             return (
-              <li key={task.id}>
+              <li className="rounded-2xl border border-transparent p-1 transition-colors hover:border-[var(--color-border)] hover:bg-[var(--color-surface-muted)]" key={task.id}>
                 <button
-                  className="group flex min-h-14 w-full cursor-pointer items-start gap-3 rounded-2xl border border-transparent px-3 py-3 text-left transition-colors hover:border-[var(--color-border)] hover:bg-[var(--color-surface-muted)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)] disabled:cursor-default disabled:opacity-60"
+                  className="group flex min-h-14 w-full cursor-pointer items-start gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)] disabled:cursor-default disabled:opacity-60"
                   type="button"
                   disabled={task.completed}
                   onClick={() => onSelectTask(task)}
@@ -58,6 +65,14 @@ export function TaskAgenda({
                     </span>
                   </span>
                 </button>
+                <div className="px-3 pb-2">
+                  <TaskCompletionControl
+                    task={task}
+                    csrfToken={csrfToken}
+                    onAuthenticationRequired={onAuthenticationRequired}
+                    onUpdated={onTaskUpdated}
+                  />
+                </div>
               </li>
             )
           })}
