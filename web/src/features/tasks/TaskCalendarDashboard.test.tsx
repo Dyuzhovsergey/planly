@@ -24,6 +24,7 @@ vi.mock('@fullcalendar/react', () => ({
         <output data-testid="calendar-task-editable">
           {String(props.events[0]?.startEditable ?? '')}
         </output>
+        <output data-testid="calendar-task-count">{props.events.length}</output>
         <button
           type="button"
           onClick={() => props.datesSet({
@@ -193,6 +194,38 @@ describe('TaskCalendarDashboard', () => {
     expect(await screen.findByRole('button', { name: 'Открыть повторно задачу Позвонить врачу' })).toBeInTheDocument()
     expect(screen.getByTestId('calendar-task-editable')).toHaveTextContent('false')
     expect(JSON.parse(fetchMock.mock.calls[1][1].body as string)).toEqual({ completed: true })
+  })
+
+  it('removes a task from the agenda and calendar only after DELETE succeeds', async () => {
+    let resolveDelete: (response: Response) => void = () => undefined
+    const deleteResponse = new Promise<Response>((resolve) => {
+      resolveDelete = resolve
+    })
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ items: [task] }))
+      .mockReturnValueOnce(deleteResponse)
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderDashboard()
+    fireEvent.click(screen.getByRole('button', { name: 'Показать диапазон' }))
+    await screen.findByText('Позвонить врачу')
+    expect(screen.getByTestId('calendar-task-count')).toHaveTextContent('1')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Удалить задачу Позвонить врачу' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Удалить' }))
+
+    expect(screen.getAllByText('Позвонить врачу')).not.toHaveLength(0)
+    expect(screen.getByTestId('calendar-task-count')).toHaveTextContent('1')
+    resolveDelete(new Response(null, { status: 204 }))
+
+    expect(await screen.findByText('Задача «Позвонить врачу» удалена.')).toBeInTheDocument()
+    expect(screen.queryByText('Позвонить врачу')).not.toBeInTheDocument()
+    expect(screen.getByTestId('calendar-task-count')).toHaveTextContent('0')
+    const [path, init] = fetchMock.mock.calls[1]
+    expect(path).toBe(`/api/v1/tasks/${task.id}`)
+    expect(init.method).toBe('DELETE')
+    expect(init.body).toBeUndefined()
   })
 
   it('uses a day calendar on narrow screens', () => {

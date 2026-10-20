@@ -4,10 +4,10 @@
 
 ## Текущий статус
 
-- Стадия: Password policy 8–128 и Frontend task completion UI приняты пользователем.
-- Завершённые инкременты: MVP-контракт; Go HTTP-сервер с `GET /health`; PostgreSQL 18.6, миграция `users` и `GET /ready`; Auth foundation; session authentication и `GET /api/v1/me`; изменение часовой зоны через `PATCH /api/v1/me`; Task storage foundation; Task creation API; Task retrieval API; Task list API; Task update API; Task completion API; Task delete API; Frontend foundation; Frontend login/logout; Frontend registration; Frontend automatic time zone; Frontend task creation UI; Frontend task list foundation; Frontend calendar dashboard and task rescheduling; Password policy 8–128; Frontend task completion UI.
-- Текущий инкремент: отсутствует; следующим предлагается Frontend task delete UI.
-- Следующее действие: согласовать небольшой инкремент удаления задачи из agenda через существующий `DELETE /api/v1/tasks/{id}` с обязательным подтверждением.
+- Стадия: Frontend task delete UI принят пользователем.
+- Завершённые инкременты: MVP-контракт; Go HTTP-сервер с `GET /health`; PostgreSQL 18.6, миграция `users` и `GET /ready`; Auth foundation; session authentication и `GET /api/v1/me`; изменение часовой зоны через `PATCH /api/v1/me`; Task storage foundation; Task creation API; Task retrieval API; Task list API; Task update API; Task completion API; Task delete API; Frontend foundation; Frontend login/logout; Frontend registration; Frontend automatic time zone; Frontend task creation UI; Frontend task list foundation; Frontend calendar dashboard and task rescheduling; Password policy 8–128; Frontend task completion UI; Frontend task delete UI.
+- Текущий инкремент: отсутствует; следующим предлагается Frontend task content editing UI.
+- Следующее действие: согласовать небольшой инкремент изменения `title` и `description` через существующий `PATCH /api/v1/tasks/{id}` без расширения schedule, пагинации и router.
 
 ## Предварительная последовательность
 
@@ -16,7 +16,7 @@
 - [x] Подключить PostgreSQL и базовые миграции; добавить `/ready` с проверкой доступности БД.
 - [x] Реализовать пользователей и аутентификацию (Auth foundation, session authentication, `GET /me` и `PATCH /me` приняты).
 - [x] Реализовать защищённое хранилище задач и обязательную серверную изоляцию пользовательских данных (storage, создание, получение, список, изменение, завершение и удаление приняты пользователем).
-- [ ] Создать React + TypeScript + Vite UI с Tailwind CSS + shadcn/ui (foundation, auth UI, task creation/list, календарный dashboard и completion UI без shadcn/ui приняты; delete UI ещё не реализован).
+- [ ] Создать React + TypeScript + Vite UI с Tailwind CSS + shadcn/ui (foundation, auth UI, task creation/list, календарный dashboard, completion и delete UI без shadcn/ui приняты; content editing UI ещё не реализован).
 - [x] Выбрать FullCalendar Standard v7 и реализовать виды месяц / неделя / день с переносом активных задач.
 - [ ] Дополнить Docker Compose контейнерами приложения и настроить безопасное веб-развёртывание.
 - [ ] Отдельно спроектировать и проверить интеграцию с Яндекс Алисой.
@@ -360,3 +360,17 @@
 **Проверка и критерии готовности:** тесты покрывают completion/reopen payload, CSRF, отсутствие `userId`, блокировку повторной отправки, `401`, `403`, network error, синхронное обновление agenda/календаря и сохранение блокировки drag для завершённого события. Требуются полные frontend/Go/Compose-проверки и ручная браузерная приёмка.
 
 **Статус:** принят пользователем после ручной проверки завершения, сохранения статуса после перезагрузки, повторного открытия и поведения при сетевой ошибке.
+
+### Frontend task delete UI
+
+**Цель и зачем сейчас:** завершить основной task CRUD во frontend, дав пользователю безопасно удалять активные и завершённые задачи из agenda через уже принятый backend endpoint.
+
+**Результат и границы задачи:** agenda получила действие удаления и доступный modal с названием задачи, явным необратимым действием и отменой. После `204 No Content` dashboard удаляет задачу из общего локального списка, поэтому она одновременно исчезает из agenda и FullCalendar. Изменение title/description, пагинация и router не добавлялись; backend API, БД, миграции и зависимости не менялись.
+
+**Файлы:** `web/src/features/tasks/api.ts`, `TaskDeleteDialog.tsx`, `TaskAgenda.tsx`, `TaskCalendarDashboard.tsx` и тесты; `web/src/shared/ui/icons.tsx`; `web/src/index.css`; `README.md`; `docs/ARCHITECTURE.md`; `docs/DEVELOPMENT_PLAN.md`.
+
+**Архитектурные решения:** dialog находится на уровне dashboard и получает выбранную Task из agenda. Он фокусирует безопасную отмену, удерживает Tab внутри modal, поддерживает Escape и возвращает фокус после закрытия. Client отправляет session-cookie и CSRF из памяти без тела и `userId`. Удаление не оптимистическое: локальное состояние меняется только после `204`; `401` запускает восстановление сессии, а `403`, единый `task_not_found` и network error показываются внутри dialog и сохраняют задачу. Семантические destructive-токены и SVG-иконка дополняют текст, не используя цвет как единственный сигнал.
+
+**Проверка и критерии готовности:** component-тесты покрывают подтверждение и отмену, focus management и Escape, точный DELETE/CSRF без `userId`, блокировку повторной отправки, `401`, `403`, `404`, network error и синхронное обновление agenda/календаря только после `204`. Требуются успешные frontend lint/test/build, race- и стандартные Go-проверки, Compose и ручная браузерная приёмка.
+
+**Статус:** принят пользователем после ручной проверки отмены, успешного удаления, сохранения результата после перезагрузки и поведения при сетевой ошибке; подтверждающая кнопка по обратной связи сокращена до «Удалить».

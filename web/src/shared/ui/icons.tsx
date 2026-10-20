@@ -60,3 +60,11 @@ export function ReopenIcon({ className = 'size-5' }: IconProps) {
     </svg>
   )
 }
+
+export function TrashIcon({ className = 'size-5' }: IconProps) {
+  return (
+    <svg {...common} className={className}>
+      <path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5" />
+    </svg>
+  )
+}

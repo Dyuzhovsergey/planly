@@ -44,3 +44,12 @@ export function updateTask(
     body: JSON.stringify(input),
   })
 }
+
+export function deleteTask(taskID: string, csrfToken: string): Promise<void> {
+  return request<void>(`/tasks/${encodeURIComponent(taskID)}`, {
+    method: 'DELETE',
+    headers: {
+      'X-CSRF-Token': csrfToken,
+    },
+  })
+}

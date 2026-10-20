@@ -1,4 +1,4 @@
-import { CheckIcon, ClockIcon } from '../../shared/ui/icons'
+import { CheckIcon, ClockIcon, TrashIcon } from '../../shared/ui/icons'
 import { formatTaskSchedule } from './date-time'
 import { TaskCompletionControl } from './TaskCompletionControl'
 import type { Task } from './types'
@@ -11,6 +11,7 @@ interface TaskAgendaProps {
   onAuthenticationRequired: () => void
   onSelectTask: (task: Task) => void
   onTaskUpdated: (task: Task) => void
+  onDeleteTask: (task: Task) => void
 }
 
 export function TaskAgenda({
@@ -21,6 +22,7 @@ export function TaskAgenda({
   onAuthenticationRequired,
   onSelectTask,
   onTaskUpdated,
+  onDeleteTask,
 }: TaskAgendaProps) {
   return (
     <section className="planly-card p-5" aria-labelledby="task-agenda-title">
@@ -65,13 +67,22 @@ export function TaskAgenda({
                     </span>
                   </span>
                 </button>
-                <div className="px-3 pb-2">
+                <div className="grid gap-2 px-3 pb-2 sm:grid-cols-2">
                   <TaskCompletionControl
                     task={task}
                     csrfToken={csrfToken}
                     onAuthenticationRequired={onAuthenticationRequired}
                     onUpdated={onTaskUpdated}
                   />
+                  <button
+                    className="planly-button-secondary w-full text-sm text-[var(--color-danger)]"
+                    type="button"
+                    aria-label={`Удалить задачу ${task.title}`}
+                    onClick={() => onDeleteTask(task)}
+                  >
+                    <TrashIcon className="size-4" />
+                    Удалить
+                  </button>
                 </div>
               </li>
             )

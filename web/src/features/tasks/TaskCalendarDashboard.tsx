@@ -8,7 +8,7 @@ import interactionPlugin from '@fullcalendar/react/interaction'
 import ruLocale from '@fullcalendar/react/locales/ru'
 import timeGridPlugin from '@fullcalendar/react/timegrid'
 import monarchThemePlugin from '@fullcalendar/react/themes/monarch'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { ApiError } from '../../shared/api/client'
 import { PlusIcon } from '../../shared/ui/icons'
@@ -17,6 +17,7 @@ import { droppedEventSchedule, taskToCalendarEvent } from './calendar-events'
 import { visibleCalendarRange } from './calendar-range'
 import { TaskAgenda } from './TaskAgenda'
 import { TaskCreateForm } from './TaskCreateForm'
+import { TaskDeleteDialog } from './TaskDeleteDialog'
 import { TaskRescheduleForm } from './TaskRescheduleForm'
 import type { Task, TaskListRange } from './types'
 
@@ -64,6 +65,9 @@ export function TaskCalendarDashboard({
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [mutationError, setMutationError] = useState<string | null>(null)
   const [isMoving, setIsMoving] = useState(false)
+  const [taskPendingDeletion, setTaskPendingDeletion] = useState<Task | null>(null)
+  const [deletionNotice, setDeletionNotice] = useState<string | null>(null)
+  const taskPanelRef = useRef<HTMLElement>(null)
 
   const tasks = useMemo(
     () => loadState.status === 'loaded' ? loadState.items : [],
@@ -113,6 +117,20 @@ export function TaskCalendarDashboard({
       : current)
     setSelectedTask((current) => current?.id === updated.id ? updated : current)
     setMutationError(null)
+  }
+
+  function removeTask(taskID: string) {
+    const deletedTask = tasks.find((task) => task.id === taskID)
+    setLoadState((current) => current.status === 'loaded'
+      ? {
+          status: 'loaded',
+          items: current.items.filter((task) => task.id !== taskID),
+        }
+      : current)
+    setSelectedTask((current) => current?.id === taskID ? null : current)
+    setTaskPendingDeletion(null)
+    setMutationError(null)
+    setDeletionNotice(deletedTask ? `Задача «${deletedTask.title}» удалена.` : 'Задача удалена.')
   }
 
   function handleEventClick(info: EventClickInfo) {
@@ -232,7 +250,12 @@ export function TaskCalendarDashboard({
         </div>
       </section>
 
-      <aside className="space-y-4" aria-label="Панель задач">
+      <aside ref={taskPanelRef} className="space-y-4" aria-label="Панель задач" tabIndex={-1}>
+        {deletionNotice && (
+          <p className="rounded-xl bg-[var(--color-accent-soft)] p-3 text-sm text-[var(--color-accent-strong)]" role="status">
+            {deletionNotice}
+          </p>
+        )}
         {(isCreateOpen || !isMobile) && !selectedTask && (
           <div className="planly-card p-5">
             <p className="planly-eyebrow">Быстрое добавление</p>
@@ -278,8 +301,23 @@ export function TaskCalendarDashboard({
             replaceTask(updated)
             setSelectedTask(null)
           }}
+          onDeleteTask={(task) => {
+            setDeletionNotice(null)
+            setTaskPendingDeletion(task)
+          }}
         />
       </aside>
+
+      {taskPendingDeletion && (
+        <TaskDeleteDialog
+          task={taskPendingDeletion}
+          csrfToken={csrfToken}
+          fallbackFocusRef={taskPanelRef}
+          onAuthenticationRequired={onAuthenticationRequired}
+          onCancel={() => setTaskPendingDeletion(null)}
+          onDeleted={removeTask}
+        />
+      )}
     </div>
   )
 }
