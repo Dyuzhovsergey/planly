@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { formatTaskSchedule, localDateTimeToRFC3339 } from './date-time'
+import {
+  formatTaskSchedule,
+  localDateTimeToRFC3339,
+  taskScheduleInputValue,
+  zonedDateTimeToRFC3339,
+} from './date-time'
 
 describe('task date and time helpers', () => {
   it('converts a valid device-local date and time to the same exact instant', () => {
@@ -37,5 +42,28 @@ describe('task date and time helpers', () => {
         'Europe/Moscow',
       ),
     ).toContain('18:30')
+  })
+})
+
+describe('calendar rescheduling values', () => {
+  it('formats a timed task for the saved user zone', () => {
+    expect(taskScheduleInputValue(
+      { type: 'timed', at: '2026-10-20T15:30:00Z' },
+      'Europe/Moscow',
+    )).toBe('2026-10-20T18:30')
+  })
+
+  it('converts a wall-clock value in an IANA zone to an instant', () => {
+    expect(zonedDateTimeToRFC3339(
+      '2026-07-10T09:15',
+      'America/New_York',
+    )).toBe('2026-07-10T13:15:00Z')
+  })
+
+  it('does not turn an all-day date into a UTC instant', () => {
+    expect(taskScheduleInputValue(
+      { type: 'allDay', date: '2026-10-25' },
+      'Pacific/Kiritimati',
+    )).toBe('2026-10-25')
   })
 })

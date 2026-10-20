@@ -1,10 +1,15 @@
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 
 import { LoginForm } from '../features/session/LoginForm'
 import { RegistrationForm } from '../features/session/RegistrationForm'
 import { useSession } from '../features/session/session-context'
-import { TaskCreateForm } from '../features/tasks/TaskCreateForm'
-import { TaskList } from '../features/tasks/TaskList'
+import { CalendarIcon, LogOutIcon } from '../shared/ui/icons'
+
+const TaskCalendarDashboard = lazy(() =>
+  import('../features/tasks/TaskCalendarDashboard').then((module) => ({
+    default: module.TaskCalendarDashboard,
+  })),
+)
 
 type AuthMode = 'login' | 'registration'
 
@@ -13,13 +18,9 @@ export function App() {
   const [authMode, setAuthMode] = useState<AuthMode>('login')
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [logoutError, setLogoutError] = useState(false)
-  const [taskListRevision, setTaskListRevision] = useState(0)
 
   async function handleLogout() {
-    if (isLoggingOut) {
-      return
-    }
-
+    if (isLoggingOut) return
     setIsLoggingOut(true)
     setLogoutError(false)
     try {
@@ -32,93 +33,73 @@ export function App() {
     }
   }
 
-  return (
-    <main className="mx-auto flex min-h-screen max-w-xl items-center px-4 py-10 sm:px-6">
-      <section className="w-full rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-        <p className="text-sm font-semibold uppercase tracking-widest text-indigo-600">
-          Planly
-        </p>
-        <h1 className="mt-2 text-3xl font-semibold text-slate-950">
-          {state.status === 'authenticated'
-            ? 'С возвращением'
-            : authMode === 'registration'
-              ? 'Создайте аккаунт'
-              : 'Войдите в Planly'}
-        </h1>
+  if (state.status === 'authenticated') {
+    return (
+      <main className="min-h-dvh bg-[var(--color-canvas)] text-[var(--color-ink)]">
+        <a className="planly-skip-link" href="#planly-workspace">Перейти к календарю</a>
+        <div className="mx-auto grid min-h-dvh max-w-[1720px] lg:grid-cols-[14rem_minmax(0,1fr)]">
+          <aside className="hidden border-r border-[var(--color-border)] bg-[var(--color-sidebar)] px-5 py-6 lg:flex lg:flex-col" aria-label="Основная навигация">
+            <div className="flex items-center gap-3">
+              <span className="grid size-10 place-items-center rounded-2xl bg-[var(--color-accent)] text-white shadow-sm"><CalendarIcon /></span>
+              <div>
+                <p className="text-lg font-bold tracking-tight">Planly</p>
+                <p className="text-xs text-[var(--color-muted)]">Ваш день в порядке</p>
+              </div>
+            </div>
+            <nav className="mt-10" aria-label="Разделы приложения">
+              <span className="flex min-h-11 items-center gap-3 rounded-2xl bg-[var(--color-accent-soft)] px-3 text-sm font-semibold text-[var(--color-accent-strong)]" aria-current="page">
+                <CalendarIcon className="size-4" />Календарь
+              </span>
+            </nav>
+            <div className="mt-auto rounded-3xl border border-[var(--color-border)] bg-white/70 p-4">
+              <p className="text-xs font-medium uppercase tracking-[0.12em] text-[var(--color-muted)]">Аккаунт</p>
+              <p className="mt-2 truncate text-sm font-semibold" title={state.user.email}>{state.user.email}</p>
+              <button className="mt-3 flex min-h-11 w-full cursor-pointer items-center gap-2 rounded-xl px-2 text-sm font-semibold text-[var(--color-muted)] transition-colors hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-ink)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)] disabled:cursor-not-allowed disabled:opacity-60" type="button" disabled={isLoggingOut} onClick={handleLogout}>
+                <LogOutIcon className="size-4" />{isLoggingOut ? 'Выходим…' : 'Выйти'}
+              </button>
+            </div>
+          </aside>
 
-        {state.status === 'loading' && (
-          <p className="mt-6 text-slate-600" role="status">
-            Восстанавливаем сессию…
-          </p>
-        )}
-
-        {state.status === 'authenticated' && (
-          <div className="mt-6" aria-live="polite">
-            <p className="text-slate-700">Вы вошли как</p>
-            <p className="mt-1 font-medium text-slate-950">{state.user.email}</p>
-            <TaskCreateForm
-              csrfToken={state.csrfToken}
-              timeZone={state.user.timeZone}
-              onAuthenticationRequired={retry}
-              onTaskCreated={() =>
-                setTaskListRevision((current) => current + 1)
-              }
-            />
-            <TaskList
-              timeZone={state.user.timeZone}
-              refreshKey={taskListRevision}
-              onAuthenticationRequired={retry}
-            />
-            {logoutError && (
-              <p className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-800" role="alert">
-                Не удалось выйти. Проверьте соединение и повторите попытку.
-              </p>
-            )}
-            <button
-              className="mt-6 min-h-11 cursor-pointer rounded-lg border border-slate-300 px-4 py-2 font-medium text-slate-800 transition-colors hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:text-slate-400"
-              type="button"
-              disabled={isLoggingOut}
-              onClick={handleLogout}
-            >
-              {isLoggingOut ? 'Выходим…' : 'Выйти'}
-            </button>
+          <div className="min-w-0">
+            <header className="flex items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-sidebar)] px-4 py-3 lg:hidden">
+              <div className="flex items-center gap-2.5 font-bold">
+                <span className="grid size-9 place-items-center rounded-xl bg-[var(--color-accent)] text-white"><CalendarIcon className="size-4" /></span>Planly
+              </div>
+              <button className="grid size-11 cursor-pointer place-items-center rounded-xl text-[var(--color-muted)] hover:bg-[var(--color-surface-muted)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]" type="button" aria-label="Выйти из мобильного интерфейса" disabled={isLoggingOut} onClick={handleLogout}><LogOutIcon /></button>
+            </header>
+            <div className="p-3 sm:p-5 lg:p-7" id="planly-workspace">
+              {logoutError && <p className="planly-error mb-4" role="alert">Не удалось выйти. Проверьте соединение и повторите попытку.</p>}
+              <Suspense fallback={<p className="planly-card p-5 text-sm text-[var(--color-muted)]" role="status">Открываем календарь…</p>}>
+                <TaskCalendarDashboard timeZone={state.user.timeZone} csrfToken={state.csrfToken} onAuthenticationRequired={retry} />
+              </Suspense>
+            </div>
           </div>
-        )}
+        </div>
+      </main>
+    )
+  }
 
+  return (
+    <main className="grid min-h-dvh place-items-center bg-[var(--color-canvas)] px-4 py-10 sm:px-6">
+      <section className="planly-card w-full max-w-xl p-8">
+        <div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-2xl bg-[var(--color-accent)] text-white"><CalendarIcon /></span><p className="font-bold tracking-tight">Planly</p></div>
+        <h1 className="mt-6 text-3xl font-semibold text-[var(--color-ink)]">{authMode === 'registration' ? 'Создайте аккаунт' : 'Войдите в Planly'}</h1>
+        {state.status === 'loading' && <p className="mt-6 text-[var(--color-muted)]" role="status">Восстанавливаем сессию…</p>}
         {state.status === 'anonymous' && (
           <>
-            {authMode === 'login' ? (
-              <LoginForm onLogin={login} />
-            ) : (
-              <RegistrationForm onRegister={register} />
-            )}
-            <p className="mt-6 text-center text-sm text-slate-600">
+            {authMode === 'login' ? <LoginForm onLogin={login} /> : <RegistrationForm onRegister={register} />}
+            <p className="mt-6 text-center text-sm text-[var(--color-muted)]">
               {authMode === 'login' ? 'Нет аккаунта?' : 'Уже зарегистрированы?'}{' '}
-              <button
-                className="min-h-11 cursor-pointer rounded-md px-2 font-medium text-indigo-700 hover:text-indigo-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-                type="button"
-                onClick={() =>
-                  setAuthMode((current) =>
-                    current === 'login' ? 'registration' : 'login',
-                  )
-                }
-              >
+              <button className="min-h-11 cursor-pointer rounded-md px-2 font-semibold text-[var(--color-accent-strong)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]" type="button" onClick={() => setAuthMode((current) => current === 'login' ? 'registration' : 'login')}>
                 {authMode === 'login' ? 'Создать аккаунт' : 'Войти'}
               </button>
             </p>
           </>
         )}
-
         {state.status === 'error' && (
           <div className="mt-6" role="alert">
             <p className="text-red-700">Не удалось связаться с Planly API.</p>
-            <button
-              className="mt-4 min-h-11 cursor-pointer rounded-lg bg-indigo-600 px-4 py-2 font-medium text-white transition-colors hover:bg-indigo-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-              type="button"
-              onClick={retry}
-            >
-              Повторить
-            </button>
+            <button className="planly-button-primary mt-4" type="button" onClick={retry}>Повторить</button>
           </div>
         )}
       </section>

@@ -27,6 +27,13 @@ export interface CreateTaskInput {
   schedule: TaskSchedule
 }
 
+export interface UpdateTaskInput {
+  title?: string
+  description?: string
+  schedule?: TaskSchedule
+  completed?: boolean
+}
+
 export interface TaskListRange {
   from: string
   to: string

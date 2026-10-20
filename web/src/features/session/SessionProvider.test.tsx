@@ -4,7 +4,28 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { App } from '../../app/App'
 import { SessionProvider } from './SessionProvider'
 
-vi.mock('../tasks/TaskList', () => ({ TaskList: () => null }))
+vi.mock('../tasks/TaskCalendarDashboard', async () => {
+  const { TaskCreateForm } = await import('../tasks/TaskCreateForm')
+  return {
+    TaskCalendarDashboard: ({
+      csrfToken,
+      timeZone,
+      onAuthenticationRequired,
+    }: {
+      csrfToken: string
+      timeZone: string
+      onAuthenticationRequired: () => void
+    }) => (
+      <TaskCreateForm
+        compact
+        csrfToken={csrfToken}
+        timeZone={timeZone}
+        onAuthenticationRequired={onAuthenticationRequired}
+        onTaskCreated={() => undefined}
+      />
+    ),
+  }
+})
 
 const authEnvelope = {
   user: {

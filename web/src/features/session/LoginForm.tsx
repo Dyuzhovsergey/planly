@@ -81,7 +81,7 @@ export function LoginForm({ onLogin }: LoginFormProps) {
         </label>
         <input
           ref={emailInput}
-          className="mt-2 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-base text-slate-950 outline-none transition-colors placeholder:text-slate-400 focus:border-indigo-600 focus:ring-2 focus:ring-indigo-200 disabled:cursor-not-allowed disabled:bg-slate-100"
+          className="planly-input mt-2"
           id="email"
           name="email"
           type="email"
@@ -107,7 +107,7 @@ export function LoginForm({ onLogin }: LoginFormProps) {
             Пароль
           </label>
           <button
-            className="min-h-11 cursor-pointer rounded-md px-2 text-sm font-medium text-indigo-700 hover:text-indigo-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:text-slate-400"
+            className="min-h-11 cursor-pointer rounded-md px-2 text-sm font-semibold text-[var(--color-accent-strong)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)] disabled:cursor-not-allowed disabled:opacity-50"
             type="button"
             disabled={isSubmitting}
             aria-controls="password"
@@ -118,7 +118,7 @@ export function LoginForm({ onLogin }: LoginFormProps) {
         </div>
         <input
           ref={passwordInput}
-          className="mt-2 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-base text-slate-950 outline-none transition-colors focus:border-indigo-600 focus:ring-2 focus:ring-indigo-200 disabled:cursor-not-allowed disabled:bg-slate-100"
+          className="planly-input mt-2"
           id="password"
           name="password"
           type={showPassword ? 'text' : 'password'}
@@ -144,7 +144,7 @@ export function LoginForm({ onLogin }: LoginFormProps) {
       )}
 
       <button
-        className="min-h-11 w-full cursor-pointer rounded-lg bg-indigo-600 px-4 py-2 font-medium text-white transition-colors hover:bg-indigo-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:bg-indigo-300"
+        className="planly-button-primary w-full"
         type="submit"
         disabled={isSubmitting}
       >

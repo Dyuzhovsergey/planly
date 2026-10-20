@@ -1,3 +1,5 @@
+import { Temporal } from 'temporal-polyfill'
+
 const localDateTimePattern =
   /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/
 
@@ -39,4 +41,47 @@ export function formatTaskSchedule(
 
   const [year, month, day] = schedule.date.split('-')
   return `${day}.${month}.${year}, весь день`
+}
+
+export function taskScheduleInputValue(
+  schedule:
+    | { type: 'timed'; at: string }
+    | { type: 'allDay'; date: string },
+  timeZone: string,
+): string {
+  if (schedule.type === 'allDay') {
+    return schedule.date
+  }
+
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date(schedule.at))
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? ''
+
+  return `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}`
+}
+
+export function zonedDateTimeToRFC3339(
+  value: string,
+  timeZone: string,
+): string | null {
+  if (!localDateTimePattern.test(value)) {
+    return null
+  }
+
+  try {
+    return Temporal.PlainDateTime.from(value)
+      .toZonedDateTime(timeZone)
+      .toInstant()
+      .toString()
+  } catch {
+    return null
+  }
 }

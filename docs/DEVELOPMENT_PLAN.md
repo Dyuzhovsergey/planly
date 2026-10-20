@@ -4,10 +4,10 @@
 
 ## Текущий статус
 
-- Стадия: Frontend task list foundation реализован и ожидает ручной браузерной приёмки.
-- Завершённые инкременты: MVP-контракт; Go HTTP-сервер с `GET /health`; PostgreSQL 18.6, миграция `users` и `GET /ready`; Auth foundation; session authentication и `GET /api/v1/me`; изменение часовой зоны через `PATCH /api/v1/me`; Task storage foundation; Task creation API; Task retrieval API; Task list API; Task update API; Task completion API; Task delete API; Frontend foundation; Frontend login/logout; Frontend registration; Frontend automatic time zone; Frontend task creation UI.
-- Текущий инкремент: Frontend task list foundation.
-- Следующее действие: вручную проверить loading, empty, error/retry, loaded, отображение timed/all-day задач и обновление списка после создания; после приёмки выбрать следующий небольшой frontend-инкремент.
+- Стадия: Frontend calendar dashboard и перенос задач приняты пользователем.
+- Завершённые инкременты: MVP-контракт; Go HTTP-сервер с `GET /health`; PostgreSQL 18.6, миграция `users` и `GET /ready`; Auth foundation; session authentication и `GET /api/v1/me`; изменение часовой зоны через `PATCH /api/v1/me`; Task storage foundation; Task creation API; Task retrieval API; Task list API; Task update API; Task completion API; Task delete API; Frontend foundation; Frontend login/logout; Frontend registration; Frontend automatic time zone; Frontend task creation UI; Frontend task list foundation; Frontend calendar dashboard and task rescheduling.
+- Текущий инкремент: отсутствует; следующий инкремент находится на этапе проектирования.
+- Следующее действие: согласовать Frontend task completion UI и отдельно синхронное снижение минимальной длины пароля с 15 до 8 символов во всех слоях.
 
 ## Предварительная последовательность
 
@@ -16,8 +16,8 @@
 - [x] Подключить PostgreSQL и базовые миграции; добавить `/ready` с проверкой доступности БД.
 - [x] Реализовать пользователей и аутентификацию (Auth foundation, session authentication, `GET /me` и `PATCH /me` приняты).
 - [x] Реализовать защищённое хранилище задач и обязательную серверную изоляцию пользовательских данных (storage, создание, получение, список, изменение, завершение и удаление приняты пользователем).
-- [ ] Создать React + TypeScript + Vite UI с Tailwind CSS + shadcn/ui (foundation, login/logout и registration без shadcn/ui приняты; продуктовые экраны ещё не реализованы).
-- [ ] Выбрать библиотеку календаря, реализовать виды месяц / неделя / день.
+- [ ] Создать React + TypeScript + Vite UI с Tailwind CSS + shadcn/ui (foundation, auth UI, task creation/list и календарный dashboard без shadcn/ui реализованы; completion/delete UI ещё не реализован).
+- [x] Выбрать FullCalendar Standard v7 и реализовать виды месяц / неделя / день с переносом активных задач.
 - [ ] Дополнить Docker Compose контейнерами приложения и настроить безопасное веб-развёртывание.
 - [ ] Отдельно спроектировать и проверить интеграцию с Яндекс Алисой.
 
@@ -318,3 +318,19 @@
 **Проверка и критерии готовности:** unit-тесты покрывают IANA-границы месяца и переход года; component-тесты — точный URL, cookie без CSRF, loading/empty/error/retry/loaded, `401`, abort, серверный порядок, явный статус, timed/all-day форматирование и перечитывание по revision. Требуются успешные frontend lint/test/build, стандартные Go-проверки, Compose и ручная браузерная приёмка.
 
 **Статус:** принят как техническая основа следующего календарного интерфейса; загрузка диапазона, состояния списка и обновление после создания сохраняются при переходе к dashboard.
+
+### Frontend calendar dashboard and task rescheduling
+
+**Цель и зачем сейчас:** превратить принятый read-only список в основной календарный интерфейс Planly и сразу сделать перенос задач полезным как мышью/touch, так и с клавиатуры.
+
+**Результат и границы задачи:** authenticated-интерфейс перестроен в адаптивный bento-dashboard с навигацией, календарём, быстрым созданием и agenda. FullCalendar поддерживает месяц/неделю/день, русский locale, понедельник как начало недели и IANA-зону пользователя. Задачи загружаются по видимому диапазону; активные задачи переносятся через drag-and-drop или доступную форму, завершённые остаются неподвижными. Backend, БД, миграции и REST-контракты не изменены; duration/resize, title/description edit, completion/delete UI, pagination и router не добавлялись.
+
+**Файлы:** `web/src/app/App.tsx`; `web/src/index.css`; `web/src/shared/ui/icons.tsx`; `web/src/features/tasks/TaskCalendarDashboard.tsx`, `TaskAgenda.tsx`, `TaskRescheduleForm.tsx`, `calendar-events.ts`, `calendar-range.ts`, `date-time.ts`, `api.ts`, `types.ts`, формы и тесты; `web/package.json`; `README.md`; `docs/PROJECT.md`; `docs/ARCHITECTURE.md`; `docs/DEVELOPMENT_PLAN.md`.
+
+**Архитектурные решения:** FullCalendar Standard v7 предоставляет бесплатные MIT month/week/day, touch и event drop; `temporal-polyfill` отвечает за явные IANA/DST-преобразования. Dashboard загружается lazy import только после аутентификации. Видимый полуинтервал преобразуется в `from/to` без передачи `userId` или `timeZone`; all-day дата никогда не становится UTC-моментом. Drop формирует полный `schedule`, использует существующий защищённый PATCH и вызывает `revert()` при ошибке. `eventDurationEditable=false`, завершённые события не редактируются. CSS использует семантические зелёные токены, единые SVG-иконки, переходы 150–250 мс и `prefers-reduced-motion`.
+
+**Проверка и критерии готовности:** unit-тесты покрывают Task → event, DST/переход года, all-day без UTC, формирование PATCH и отсутствие `userId`/duration; component-тесты — loading/empty/error/retry/loaded, обновление после создания, mobile day, `401`, drop/revert и доступную форму. Требуются успешные `npm run lint`, `npm test`, `npm run build`, стандартные Go-проверки, Compose и ручная приёмка на 375/768/1024/1440 px.
+
+**Риски / вопросы:** native drag-and-drop и `datetime-local` различаются между browser и touch-устройствами, поэтому их необходимо проверить вручную; форма переноса остаётся обязательной доступной альтернативой.
+
+**Статус:** принят пользователем после ручной проверки адаптивности на 375/768/1024/1440 px, создания timed/all-day задач, переключения видов и сохранения переноса после перезагрузки.

@@ -6,6 +6,7 @@ import { formatTaskSchedule, localDateTimeToRFC3339 } from './date-time'
 import type { CreateTaskInput, Task, TaskSchedule } from './types'
 
 interface TaskCreateFormProps {
+  compact?: boolean
   csrfToken: string
   timeZone: string
   onAuthenticationRequired: () => void
@@ -22,6 +23,7 @@ interface FieldErrors {
 }
 
 export function TaskCreateForm({
+  compact = false,
   csrfToken,
   timeZone,
   onAuthenticationRequired,
@@ -164,16 +166,15 @@ export function TaskCreateForm({
     }
   }
 
-  const inputClassName =
-    'mt-2 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-base text-slate-950 outline-none transition-colors focus:border-indigo-600 focus:ring-2 focus:ring-indigo-200 disabled:cursor-not-allowed disabled:bg-slate-100'
+  const inputClassName = 'planly-input mt-2'
 
   return (
-    <section className="mt-6 border-t border-slate-200 pt-6" aria-labelledby="task-create-title">
-      <h2 className="text-xl font-semibold text-slate-950" id="task-create-title">
+    <section className={compact ? 'mt-2' : 'mt-6 border-t border-slate-200 pt-6'} aria-labelledby="task-create-title">
+      <h2 className={`${compact ? 'text-lg' : 'text-xl'} font-semibold text-[var(--color-ink)]`} id="task-create-title">
         Новая задача
       </h2>
       <form
-        className="mt-5 space-y-5"
+        className={compact ? 'mt-4 space-y-4' : 'mt-5 space-y-5'}
         noValidate
         onSubmit={handleSubmit}
         aria-busy={isSubmitting}
@@ -237,7 +238,7 @@ export function TaskCreateForm({
         <fieldset>
           <legend className="text-sm font-medium text-slate-800">Расписание</legend>
           <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-800 has-[:checked]:border-indigo-600 has-[:checked]:bg-indigo-50">
+            <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl border border-[var(--color-border)] px-3 py-2 text-sm font-medium text-[var(--color-ink)] has-[:checked]:border-[var(--color-accent)] has-[:checked]:bg-[var(--color-accent-soft)]">
               <input
                 type="radio"
                 name="scheduleType"
@@ -254,7 +255,7 @@ export function TaskCreateForm({
               />
               Дата и время
             </label>
-            <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-800 has-[:checked]:border-indigo-600 has-[:checked]:bg-indigo-50">
+            <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl border border-[var(--color-border)] px-3 py-2 text-sm font-medium text-[var(--color-ink)] has-[:checked]:border-[var(--color-accent)] has-[:checked]:bg-[var(--color-accent-soft)]">
               <input
                 type="radio"
                 name="scheduleType"
@@ -360,7 +361,7 @@ export function TaskCreateForm({
         )}
 
         <button
-          className="min-h-11 w-full cursor-pointer rounded-lg bg-indigo-600 px-4 py-2 font-medium text-white transition-colors hover:bg-indigo-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:bg-indigo-300"
+          className="planly-button-primary w-full"
           type="submit"
           disabled={isSubmitting}
         >
