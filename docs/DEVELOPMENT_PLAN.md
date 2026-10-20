@@ -4,10 +4,10 @@
 
 ## Текущий статус
 
-- Стадия: Frontend task delete UI принят пользователем.
-- Завершённые инкременты: MVP-контракт; Go HTTP-сервер с `GET /health`; PostgreSQL 18.6, миграция `users` и `GET /ready`; Auth foundation; session authentication и `GET /api/v1/me`; изменение часовой зоны через `PATCH /api/v1/me`; Task storage foundation; Task creation API; Task retrieval API; Task list API; Task update API; Task completion API; Task delete API; Frontend foundation; Frontend login/logout; Frontend registration; Frontend automatic time zone; Frontend task creation UI; Frontend task list foundation; Frontend calendar dashboard and task rescheduling; Password policy 8–128; Frontend task completion UI; Frontend task delete UI.
-- Текущий инкремент: отсутствует; следующим предлагается Frontend task content editing UI.
-- Следующее действие: согласовать небольшой инкремент изменения `title` и `description` через существующий `PATCH /api/v1/tasks/{id}` без расширения schedule, пагинации и router.
+- Стадия: Frontend task content editing UI принят пользователем.
+- Завершённые инкременты: MVP-контракт; Go HTTP-сервер с `GET /health`; PostgreSQL 18.6, миграция `users` и `GET /ready`; Auth foundation; session authentication и `GET /api/v1/me`; изменение часовой зоны через `PATCH /api/v1/me`; Task storage foundation; Task creation API; Task retrieval API; Task list API; Task update API; Task completion API; Task delete API; Frontend foundation; Frontend login/logout; Frontend registration; Frontend automatic time zone; Frontend task creation UI; Frontend task list foundation; Frontend calendar dashboard and task rescheduling; Password policy 8–128; Frontend task completion UI; Frontend task delete UI; Frontend task content editing UI.
+- Текущий инкремент: отсутствует; следующим предлагается Containerized API foundation.
+- Следующее действие: согласовать небольшой инкремент multi-stage Dockerfile для Go API и подключения API к Docker Compose без frontend-контейнера, reverse proxy, HTTPS и публикации.
 
 ## Предварительная последовательность
 
@@ -16,7 +16,7 @@
 - [x] Подключить PostgreSQL и базовые миграции; добавить `/ready` с проверкой доступности БД.
 - [x] Реализовать пользователей и аутентификацию (Auth foundation, session authentication, `GET /me` и `PATCH /me` приняты).
 - [x] Реализовать защищённое хранилище задач и обязательную серверную изоляцию пользовательских данных (storage, создание, получение, список, изменение, завершение и удаление приняты пользователем).
-- [ ] Создать React + TypeScript + Vite UI с Tailwind CSS + shadcn/ui (foundation, auth UI, task creation/list, календарный dashboard, completion и delete UI без shadcn/ui приняты; content editing UI ещё не реализован).
+- [ ] Создать React + TypeScript + Vite UI с Tailwind CSS + shadcn/ui (foundation, auth UI и основной task CRUD без shadcn/ui приняты; дальнейшее расширение дизайн-системы отдельно не согласовано).
 - [x] Выбрать FullCalendar Standard v7 и реализовать виды месяц / неделя / день с переносом активных задач.
 - [ ] Дополнить Docker Compose контейнерами приложения и настроить безопасное веб-развёртывание.
 - [ ] Отдельно спроектировать и проверить интеграцию с Яндекс Алисой.
@@ -374,3 +374,17 @@
 **Проверка и критерии готовности:** component-тесты покрывают подтверждение и отмену, focus management и Escape, точный DELETE/CSRF без `userId`, блокировку повторной отправки, `401`, `403`, `404`, network error и синхронное обновление agenda/календаря только после `204`. Требуются успешные frontend lint/test/build, race- и стандартные Go-проверки, Compose и ручная браузерная приёмка.
 
 **Статус:** принят пользователем после ручной проверки отмены, успешного удаления, сохранения результата после перезагрузки и поведения при сетевой ошибке; подтверждающая кнопка по обратной связи сокращена до «Удалить».
+
+### Frontend task content editing UI
+
+**Цель и зачем сейчас:** завершить основной frontend CRUD после принятых создания, календарного переноса, completion и удаления, переиспользуя существующий защищённый PATCH без расширения backend-контракта.
+
+**Результат и границы задачи:** прежняя форма переноса заменена единым `TaskEditForm` для частичного изменения `title`, `description` и существующих timed/all-day вариантов `schedule`. Форма заполнена текущими значениями, блокирует сохранение без изменений и после успешного ответа синхронно обновляет agenda и FullCalendar. Завершённым задачам разрешено менять содержимое, но не расписание. Новые возможности schedule, пагинация и router не добавлялись; backend, БД, миграции и зависимости не менялись.
+
+**Файлы:** `web/src/features/tasks/TaskEditForm.tsx`, `TaskAgenda.tsx`, `TaskCalendarDashboard.tsx` и тесты; удалён заменённый `TaskRescheduleForm`; `README.md`; `docs/ARCHITECTURE.md`; `docs/DEVELOPMENT_PLAN.md`.
+
+**Архитектурные решения:** форма сравнивает draft с подтверждённой Task и формирует минимальный PATCH: нормализованный title, description с допустимой пустой строкой и/или целостный schedule. Session-cookie добавляет общий client, browser формирует Origin, CSRF поступает только из памяти `SessionProvider`; `userId` и `completed` форма не отправляет. Полевые `validation_failed` показываются рядом с соответствующим контролом и переводят туда фокус. При `401`, `403`, `task_not_found` или network error локальная Task не заменяется, а введённые значения остаются в форме. Рекомендации `ui-ux-pro-max` применены к явным labels, focus management, заблокированному submit без изменений и доступной обратной связи без изменения принятой bento-дизайн-системы.
+
+**Проверка и критерии готовности:** component-тесты покрывают начальные значения, минимальный payload, очистку description, оба вида schedule, запрет изменения schedule завершённой задачи, cookie/CSRF, отсутствие `userId`/`completed`, полевые ошибки и фокус, двойную отправку, `401`, `403`, `404`, network error и синхронное обновление agenda/календаря. Требуются успешные frontend lint/test/build, race- и стандартные Go-проверки, Compose и ручная браузерная приёмка.
+
+**Статус:** принят пользователем после ручной проверки редактирования содержимого и расписания, очистки description, синхронного обновления agenda и календаря, блокировки schedule завершённой задачи и сохранения draft при сетевой ошибке.

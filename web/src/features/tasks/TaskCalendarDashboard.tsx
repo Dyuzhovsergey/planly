@@ -18,7 +18,7 @@ import { visibleCalendarRange } from './calendar-range'
 import { TaskAgenda } from './TaskAgenda'
 import { TaskCreateForm } from './TaskCreateForm'
 import { TaskDeleteDialog } from './TaskDeleteDialog'
-import { TaskRescheduleForm } from './TaskRescheduleForm'
+import { TaskEditForm } from './TaskEditForm'
 import type { Task, TaskListRange } from './types'
 
 interface TaskCalendarDashboardProps {
@@ -66,7 +66,7 @@ export function TaskCalendarDashboard({
   const [mutationError, setMutationError] = useState<string | null>(null)
   const [isMoving, setIsMoving] = useState(false)
   const [taskPendingDeletion, setTaskPendingDeletion] = useState<Task | null>(null)
-  const [deletionNotice, setDeletionNotice] = useState<string | null>(null)
+  const [taskNotice, setTaskNotice] = useState<string | null>(null)
   const taskPanelRef = useRef<HTMLElement>(null)
 
   const tasks = useMemo(
@@ -130,12 +130,12 @@ export function TaskCalendarDashboard({
     setSelectedTask((current) => current?.id === taskID ? null : current)
     setTaskPendingDeletion(null)
     setMutationError(null)
-    setDeletionNotice(deletedTask ? `Задача «${deletedTask.title}» удалена.` : 'Задача удалена.')
+    setTaskNotice(deletedTask ? `Задача «${deletedTask.title}» удалена.` : 'Задача удалена.')
   }
 
   function handleEventClick(info: EventClickInfo) {
     const task = tasks.find((item) => item.id === info.event.id)
-    if (task && !task.completed) {
+    if (task) {
       setSelectedTask(task)
       setIsCreateOpen(false)
     }
@@ -251,9 +251,9 @@ export function TaskCalendarDashboard({
       </section>
 
       <aside ref={taskPanelRef} className="space-y-4" aria-label="Панель задач" tabIndex={-1}>
-        {deletionNotice && (
+        {taskNotice && (
           <p className="rounded-xl bg-[var(--color-accent-soft)] p-3 text-sm text-[var(--color-accent-strong)]" role="status">
-            {deletionNotice}
+            {taskNotice}
           </p>
         )}
         {(isCreateOpen || !isMobile) && !selectedTask && (
@@ -273,7 +273,7 @@ export function TaskCalendarDashboard({
         )}
 
         {selectedTask && (
-          <TaskRescheduleForm
+          <TaskEditForm
             key={`${selectedTask.id}-${selectedTask.updatedAt}`}
             task={selectedTask}
             timeZone={timeZone}
@@ -283,6 +283,7 @@ export function TaskCalendarDashboard({
             onUpdated={(updated) => {
               replaceTask(updated)
               setSelectedTask(null)
+              setTaskNotice(`Задача «${updated.title}» обновлена.`)
             }}
           />
         )}
@@ -293,7 +294,7 @@ export function TaskCalendarDashboard({
           title={agendaTitle}
           csrfToken={csrfToken}
           onAuthenticationRequired={onAuthenticationRequired}
-          onSelectTask={(task) => {
+          onEditTask={(task) => {
             setSelectedTask(task)
             setIsCreateOpen(false)
           }}
@@ -302,7 +303,7 @@ export function TaskCalendarDashboard({
             setSelectedTask(null)
           }}
           onDeleteTask={(task) => {
-            setDeletionNotice(null)
+            setTaskNotice(null)
             setTaskPendingDeletion(task)
           }}
         />

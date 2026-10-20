@@ -6,7 +6,7 @@ import type { Task } from './types'
 
 interface CalendarMockProps {
   initialView: string
-  events: Array<{ id?: string; startEditable?: boolean }>
+  events: Array<{ id?: string; title?: string; startEditable?: boolean }>
   datesSet: (info: { start: Date; end: Date }) => void
   eventDrop: (info: unknown) => void
 }
@@ -25,6 +25,10 @@ vi.mock('@fullcalendar/react', () => ({
           {String(props.events[0]?.startEditable ?? '')}
         </output>
         <output data-testid="calendar-task-count">{props.events.length}</output>
+        <output
+          data-testid="calendar-task-title"
+          data-title={props.events[0]?.title ?? ''}
+        />
         <button
           type="button"
           onClick={() => props.datesSet({
@@ -194,6 +198,38 @@ describe('TaskCalendarDashboard', () => {
     expect(await screen.findByRole('button', { name: 'Открыть повторно задачу Позвонить врачу' })).toBeInTheDocument()
     expect(screen.getByTestId('calendar-task-editable')).toHaveTextContent('false')
     expect(JSON.parse(fetchMock.mock.calls[1][1].body as string)).toEqual({ completed: true })
+  })
+
+  it('updates the agenda and calendar after editing task content', async () => {
+    const updated = {
+      ...task,
+      title: 'Позвонить терапевту',
+      description: 'Уточнить кабинет',
+      updatedAt: '2026-10-20T16:00:00Z',
+    }
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ items: [task] }))
+      .mockResolvedValueOnce(jsonResponse(updated))
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderDashboard()
+    fireEvent.click(screen.getByRole('button', { name: 'Показать диапазон' }))
+    await screen.findByText('Позвонить врачу')
+    expect(screen.getByTestId('calendar-task-title')).toHaveAttribute('data-title', task.title)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Редактировать задачу Позвонить врачу' }))
+    fireEvent.change(screen.getByLabelText('Название'), { target: { value: updated.title } })
+    fireEvent.change(screen.getByLabelText(/Описание/), { target: { value: updated.description } })
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
+
+    expect(await screen.findByText(`Задача «${updated.title}» обновлена.`)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: `Редактировать задачу ${updated.title}` })).toBeInTheDocument()
+    expect(screen.getByTestId('calendar-task-title')).toHaveAttribute('data-title', updated.title)
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body as string)).toEqual({
+      title: updated.title,
+      description: updated.description,
+    })
   })
 
   it('removes a task from the agenda and calendar only after DELETE succeeds', async () => {

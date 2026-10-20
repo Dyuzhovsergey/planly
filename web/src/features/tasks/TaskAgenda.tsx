@@ -9,7 +9,7 @@ interface TaskAgendaProps {
   title: string
   csrfToken: string
   onAuthenticationRequired: () => void
-  onSelectTask: (task: Task) => void
+  onEditTask: (task: Task) => void
   onTaskUpdated: (task: Task) => void
   onDeleteTask: (task: Task) => void
 }
@@ -20,7 +20,7 @@ export function TaskAgenda({
   title,
   csrfToken,
   onAuthenticationRequired,
-  onSelectTask,
+  onEditTask,
   onTaskUpdated,
   onDeleteTask,
 }: TaskAgendaProps) {
@@ -51,9 +51,8 @@ export function TaskAgenda({
                 <button
                   className="group flex min-h-14 w-full cursor-pointer items-start gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)] disabled:cursor-default disabled:opacity-60"
                   type="button"
-                  disabled={task.completed}
-                  onClick={() => onSelectTask(task)}
-                  aria-label={task.completed ? `${task.title}, выполнена` : `Перенести задачу ${task.title}`}
+                  onClick={() => onEditTask(task)}
+                  aria-label={`Редактировать задачу ${task.title}`}
                 >
                   <span className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-xl bg-[var(--color-accent-soft)] text-[var(--color-accent-strong)]">
                     <Icon className="size-4" />
