@@ -4,10 +4,10 @@
 
 ## Текущий статус
 
-- Стадия: Frontend task content editing UI принят пользователем.
-- Завершённые инкременты: MVP-контракт; Go HTTP-сервер с `GET /health`; PostgreSQL 18.6, миграция `users` и `GET /ready`; Auth foundation; session authentication и `GET /api/v1/me`; изменение часовой зоны через `PATCH /api/v1/me`; Task storage foundation; Task creation API; Task retrieval API; Task list API; Task update API; Task completion API; Task delete API; Frontend foundation; Frontend login/logout; Frontend registration; Frontend automatic time zone; Frontend task creation UI; Frontend task list foundation; Frontend calendar dashboard and task rescheduling; Password policy 8–128; Frontend task completion UI; Frontend task delete UI; Frontend task content editing UI.
-- Текущий инкремент: отсутствует; следующим предлагается Containerized API foundation.
-- Следующее действие: согласовать небольшой инкремент multi-stage Dockerfile для Go API и подключения API к Docker Compose без frontend-контейнера, reverse proxy, HTTPS и публикации.
+- Стадия: Containerized API foundation принят пользователем.
+- Завершённые инкременты: MVP-контракт; Go HTTP-сервер с `GET /health`; PostgreSQL 18.6, миграция `users` и `GET /ready`; Auth foundation; session authentication и `GET /api/v1/me`; изменение часовой зоны через `PATCH /api/v1/me`; Task storage foundation; Task creation API; Task retrieval API; Task list API; Task update API; Task completion API; Task delete API; Frontend foundation; Frontend login/logout; Frontend registration; Frontend automatic time zone; Frontend task creation UI; Frontend task list foundation; Frontend calendar dashboard and task rescheduling; Password policy 8–128; Frontend task completion UI; Frontend task delete UI; Frontend task content editing UI; Containerized API foundation.
+- Текущий инкремент: отсутствует; следующим предлагается Frontend container and local reverse proxy foundation.
+- Следующее действие: согласовать production-сборку Vite, контейнер статических файлов и единый локальный origin с проксированием `/api` в Compose без HTTPS и публикации.
 
 ## Предварительная последовательность
 
@@ -18,7 +18,7 @@
 - [x] Реализовать защищённое хранилище задач и обязательную серверную изоляцию пользовательских данных (storage, создание, получение, список, изменение, завершение и удаление приняты пользователем).
 - [ ] Создать React + TypeScript + Vite UI с Tailwind CSS + shadcn/ui (foundation, auth UI и основной task CRUD без shadcn/ui приняты; дальнейшее расширение дизайн-системы отдельно не согласовано).
 - [x] Выбрать FullCalendar Standard v7 и реализовать виды месяц / неделя / день с переносом активных задач.
-- [ ] Дополнить Docker Compose контейнерами приложения и настроить безопасное веб-развёртывание.
+- [ ] Дополнить Docker Compose контейнерами приложения и настроить безопасное веб-развёртывание (API foundation принят; frontend-контейнер, reverse proxy, HTTPS и production deployment ещё не согласованы).
 - [ ] Отдельно спроектировать и проверить интеграцию с Яндекс Алисой.
 
 Порядок можно пересматривать после обсуждения, без автоматического перехода к следующему пункту.
@@ -388,3 +388,17 @@
 **Проверка и критерии готовности:** component-тесты покрывают начальные значения, минимальный payload, очистку description, оба вида schedule, запрет изменения schedule завершённой задачи, cookie/CSRF, отсутствие `userId`/`completed`, полевые ошибки и фокус, двойную отправку, `401`, `403`, `404`, network error и синхронное обновление agenda/календаря. Требуются успешные frontend lint/test/build, race- и стандартные Go-проверки, Compose и ручная браузерная приёмка.
 
 **Статус:** принят пользователем после ручной проверки редактирования содержимого и расписания, очистки description, синхронного обновления agenda и календаря, блокировки schedule завершённой задачи и сохранения draft при сетевой ошибке.
+
+### Containerized API foundation
+
+**Цель и зачем сейчас:** стандартизировать локальный запуск готового backend после принятого основного CRUD, чтобы PostgreSQL, миграции и API поднимались одной Compose-командой без зависимости от локального Go runtime.
+
+**Результат и границы задачи:** добавлен multi-stage образ с отдельными бинарниками API и миграций, а Compose расширен одноразовым `migrate` и долгоживущим `api`. Сохранены существующий PostgreSQL service, именованный volume и host-based `go run` workflow. Frontend-контейнер, reverse proxy, HTTPS, Docker secrets, CI/CD и публикация не добавлялись; REST API, Go-код и схема БД не менялись.
+
+**Файлы:** `Dockerfile`; `.dockerignore`; `compose.yaml`; `.env.example`; `README.md`; `docs/ARCHITECTURE.md`; `docs/DEVELOPMENT_PLAN.md`.
+
+**Архитектурные решения:** builder на Go 1.26 создаёт статические бинарники с `CGO_ENABLED=0`, а Alpine runtime добавляет только `ca-certificates`, `tzdata` и непривилегированного пользователя. Отдельный миграционный процесс сохраняет границу ответственности и завершает работу до старта API. Контейнерный `DATABASE_URL` использует Compose DNS `postgres:5432`, тогда как host DSN остаётся прежним. API доступен только через loopback, readiness проверяет БД; application services используют read-only root filesystem, временный `/tmp`, `cap_drop: ALL` и `no-new-privileges`.
+
+**Проверка и критерии готовности:** должны проходить Go test/race/vet/build, `docker compose config --quiet` и реальная сборка образа. Smoke-тест подтверждает `migrate` с кодом `0`, healthy PostgreSQL/API, ответы `200` от `/health` и `/ready`, uid непривилегированного пользователя, наличие tzdata/CA, read-only runtime и корректные логи graceful shutdown после `docker compose stop api`.
+
+**Статус:** принят пользователем после ручной проверки сборки, `migrate` с кодом `0`, healthy PostgreSQL/API, `/health`, `/ready`, работы frontend с контейнерным API и graceful shutdown.

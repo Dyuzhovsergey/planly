@@ -80,10 +80,14 @@ Web (React + TypeScript) ----\
 
 ## Развёртывание
 
-- Docker Compose для локального окружения и начального серверного развёртывания.
+- Multi-stage `Dockerfile` собирает статические `planly-api` и `planly-migrate` в Go builder-слое. Runtime основан на минимальном Alpine, содержит только оба бинарника, CA-сертификаты и IANA `tzdata` и запускается от непривилегированного пользователя `planly`.
+- `.dockerignore` использует allow-list и передаёт builder только Go-модули, `cmd`, `internal` и embedded-миграции; локальные `.env`, frontend, документация и Git metadata не входят в build context.
+- Docker Compose сохраняет существующий PostgreSQL volume и запускает цепочку `postgres healthy → migrate exited 0 → api`. Миграции остаются отдельным одноразовым процессом, а не частью старта HTTP-сервера. API подключается к `postgres:5432` по внутренней сети и имеет readiness healthcheck через `GET /ready`.
+- Контейнеры приложения работают с read-only root filesystem, временным `/tmp`, без Linux capabilities и с `no-new-privileges`. API публикуется только на loopback хоста; `SIGTERM` проходит напрямую в Go-процесс и использует существующее graceful shutdown.
+- Запуск `go run ./cmd/migrate up` и `go run ./cmd/api` на хосте сохраняется как альтернативный workflow разработки.
 - В продакшене можно обслуживать собранный frontend как статические файлы через веб-сервер/прокси, а Go API запускать отдельным контейнером.
 - PostgreSQL использует постоянное хранилище; резервное копирование и обновления необходимо спроектировать до публичного запуска.
-- Конкретные Dockerfile, Compose-конфигурация и reverse proxy пока не утверждены.
+- Frontend-контейнер, reverse proxy, HTTPS, production secrets, публикация образов и CI/CD пока не спроектированы.
 
 ## Будущая интеграция с Алисой
 
