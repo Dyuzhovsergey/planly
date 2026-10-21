@@ -95,7 +95,7 @@ describe('TaskCreateForm', () => {
     expect(init.body as string).not.toContain('userId')
     expect(onTaskCreated).toHaveBeenCalledWith(timedTask)
     expect(screen.getByLabelText('Название')).toHaveValue('')
-    expect(screen.getByLabelText('Название')).toHaveFocus()
+    await waitFor(() => expect(screen.getByLabelText('Название')).toHaveFocus())
   })
 
   it('creates an all-day task without a timed field in the payload', async () => {

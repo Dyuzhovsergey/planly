@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter, useLocation, useNavigate } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { TaskCalendarDashboard } from './TaskCalendarDashboard'
@@ -6,21 +7,44 @@ import type { Task } from './types'
 
 interface CalendarMockProps {
   initialView: string
+  initialDate: string
   events: Array<{ id?: string; title?: string; startEditable?: boolean }>
-  datesSet: (info: { start: Date; end: Date }) => void
+  datesSet: (info: {
+    start: Date
+    end: Date
+    view: { type: string; calendar: typeof calendarHarness.api }
+  }) => void
   eventDrop: (info: unknown) => void
 }
 
 const calendarHarness = vi.hoisted(() => ({
   props: null as CalendarMockProps | null,
   revert: vi.fn(),
+  currentDate: '2026-10-01T09:00:00Z',
+  api: {
+    view: { type: 'dayGridMonth' },
+    getDate: vi.fn(() => new Date(calendarHarness.currentDate)),
+    changeView: vi.fn((view: string, date: string) => {
+      calendarHarness.api.view.type = view
+      calendarHarness.currentDate = `${date}T09:00:00Z`
+    }),
+  },
 }))
 
 vi.mock('@fullcalendar/react', () => ({
   default: (props: CalendarMockProps) => {
     calendarHarness.props = props
+    const showRange = (view: string, date: string) => {
+      calendarHarness.api.view.type = view
+      calendarHarness.currentDate = `${date}T09:00:00Z`
+      props.datesSet({
+        start: new Date('2026-09-27T21:00:00Z'),
+        end: new Date('2026-11-01T21:00:00Z'),
+        view: { type: view, calendar: calendarHarness.api },
+      })
+    }
     return (
-      <div data-testid="calendar" data-view={props.initialView}>
+      <div data-testid="calendar" data-view={props.initialView} data-date={props.initialDate}>
         <output data-testid="calendar-task-editable">
           {String(props.events[0]?.startEditable ?? '')}
         </output>
@@ -31,12 +55,12 @@ vi.mock('@fullcalendar/react', () => ({
         />
         <button
           type="button"
-          onClick={() => props.datesSet({
-            start: new Date('2026-09-27T21:00:00Z'),
-            end: new Date('2026-11-01T21:00:00Z'),
-          })}
+          onClick={() => showRange(props.initialView, props.initialDate)}
         >
           Показать диапазон
+        </button>
+        <button type="button" onClick={() => showRange('timeGridDay', '2026-10-21')}>
+          Перейти к дню
         </button>
         {props.events[0] && (
           <button
@@ -59,6 +83,18 @@ vi.mock('@fullcalendar/react', () => ({
   },
 }))
 
+function RouterProbe() {
+  const location = useLocation()
+  const navigate = useNavigate()
+  return (
+    <>
+      <output data-testid="calendar-location">{location.pathname}{location.search}</output>
+      <button type="button" onClick={() => navigate(-1)}>Назад</button>
+      <button type="button" onClick={() => navigate(1)}>Вперёд</button>
+    </>
+  )
+}
+
 const task: Task = {
   id: 'b53d44f7-7a75-483c-953d-c2a70b0e0c4f',
   title: 'Позвонить врачу',
@@ -77,14 +113,17 @@ function jsonResponse(body: unknown, status = 200) {
   })
 }
 
-function renderDashboard(onAuthenticationRequired = vi.fn()) {
+function renderDashboard(onAuthenticationRequired = vi.fn(), initialPath = '/app') {
   return {
     ...render(
-      <TaskCalendarDashboard
-        timeZone="Europe/Moscow"
-        csrfToken="csrf-in-memory"
-        onAuthenticationRequired={onAuthenticationRequired}
-      />,
+      <MemoryRouter initialEntries={[initialPath]}>
+        <TaskCalendarDashboard
+          timeZone="Europe/Moscow"
+          csrfToken="csrf-in-memory"
+          onAuthenticationRequired={onAuthenticationRequired}
+        />
+        <RouterProbe />
+      </MemoryRouter>,
     ),
     onAuthenticationRequired,
   }
@@ -94,11 +133,66 @@ afterEach(() => {
   cleanup()
   calendarHarness.props = null
   calendarHarness.revert.mockReset()
+  calendarHarness.currentDate = '2026-10-01T09:00:00Z'
+  calendarHarness.api.view.type = 'dayGridMonth'
+  calendarHarness.api.getDate.mockClear()
+  calendarHarness.api.changeView.mockClear()
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
 })
 
 describe('TaskCalendarDashboard', () => {
+  it('restores the calendar view and date from the URL', () => {
+    vi.stubGlobal('fetch', vi.fn())
+
+    renderDashboard(vi.fn(), '/app?view=week&date=2026-10-21')
+
+    expect(screen.getByTestId('calendar')).toHaveAttribute('data-view', 'timeGridWeek')
+    expect(screen.getByTestId('calendar')).toHaveAttribute('data-date', '2026-10-21')
+  })
+
+  it('replaces invalid calendar parameters and preserves unrelated query state', async () => {
+    vi.stubGlobal('fetch', vi.fn())
+
+    renderDashboard(vi.fn(), '/app?source=notification&view=agenda&date=2026-02-30')
+
+    await waitFor(() => {
+      const location = screen.getByTestId('calendar-location').textContent ?? ''
+      expect(location).toMatch(/^\/app\?source=notification&view=month&date=\d{4}-\d{2}-\d{2}$/)
+    })
+  })
+
+  it('writes calendar navigation to history and restores it on Back', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ items: [] })))
+
+    renderDashboard(vi.fn(), '/app?view=month&date=2026-10-01')
+    fireEvent.click(screen.getByRole('button', { name: 'Показать диапазон' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Перейти к дню' }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('calendar-location'))
+        .toHaveTextContent('/app?view=day&date=2026-10-21')
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Назад' }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('calendar-location'))
+        .toHaveTextContent('/app?view=month&date=2026-10-01')
+      expect(calendarHarness.api.changeView)
+        .toHaveBeenCalledWith('dayGridMonth', '2026-10-01')
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Вперёд' }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('calendar-location'))
+        .toHaveTextContent('/app?view=day&date=2026-10-21')
+      expect(calendarHarness.api.changeView)
+        .toHaveBeenCalledWith('timeGridDay', '2026-10-21')
+    })
+  })
+
   it('loads the visible range and renders the desktop month dashboard', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ items: [task] }))
     vi.stubGlobal('fetch', fetchMock)

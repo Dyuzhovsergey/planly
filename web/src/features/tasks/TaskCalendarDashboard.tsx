@@ -9,12 +9,22 @@ import ruLocale from '@fullcalendar/react/locales/ru'
 import timeGridPlugin from '@fullcalendar/react/timegrid'
 import monarchThemePlugin from '@fullcalendar/react/themes/monarch'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router'
 
 import { ApiError } from '../../shared/api/client'
 import { PlusIcon } from '../../shared/ui/icons'
 import { listTasks, updateTask } from './api'
 import { droppedEventSchedule, taskToCalendarEvent } from './calendar-events'
 import { visibleCalendarRange } from './calendar-range'
+import {
+  calendarDateForInstant,
+  calendarSearchParams,
+  currentCalendarDate,
+  fromFullCalendarView,
+  hasCanonicalCalendarSearch,
+  parseCalendarURLState,
+  toFullCalendarView,
+} from './calendar-url-state'
 import { TaskAgenda } from './TaskAgenda'
 import { TaskCreateForm } from './TaskCreateForm'
 import { TaskDeleteDialog } from './TaskDeleteDialog'
@@ -58,6 +68,15 @@ export function TaskCalendarDashboard({
   onAuthenticationRequired,
 }: TaskCalendarDashboardProps) {
   const isMobile = useMobileCalendar()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const fallbackDate = useMemo(() => currentCalendarDate(timeZone), [timeZone])
+  const calendarURLState = useMemo(
+    () => parseCalendarURLState(searchParams, {
+      view: isMobile ? 'day' : 'month',
+      date: fallbackDate,
+    }),
+    [fallbackDate, isMobile, searchParams],
+  )
   const [range, setRange] = useState<TaskListRange | null>(null)
   const [loadState, setLoadState] = useState<LoadState>({ status: 'idle' })
   const [attempt, setAttempt] = useState(0)
@@ -68,12 +87,32 @@ export function TaskCalendarDashboard({
   const [taskPendingDeletion, setTaskPendingDeletion] = useState<Task | null>(null)
   const [taskNotice, setTaskNotice] = useState<string | null>(null)
   const taskPanelRef = useRef<HTMLElement>(null)
+  const calendarAPIRef = useRef<DatesSetInfo['view']['calendar'] | null>(null)
 
   const tasks = useMemo(
     () => loadState.status === 'loaded' ? loadState.items : [],
     [loadState],
   )
   const events = useMemo(() => tasks.map(taskToCalendarEvent), [tasks])
+
+  useEffect(() => {
+    if (!hasCanonicalCalendarSearch(searchParams, calendarURLState)) {
+      setSearchParams(calendarSearchParams(searchParams, calendarURLState), { replace: true })
+    }
+  }, [calendarURLState, searchParams, setSearchParams])
+
+  useEffect(() => {
+    const calendarAPI = calendarAPIRef.current
+    if (!calendarAPI) {
+      return
+    }
+
+    const targetView = toFullCalendarView(calendarURLState.view)
+    const currentDate = calendarDateForInstant(calendarAPI.getDate(), timeZone)
+    if (calendarAPI.view.type !== targetView || currentDate !== calendarURLState.date) {
+      calendarAPI.changeView(targetView, calendarURLState.date)
+    }
+  }, [calendarURLState, timeZone])
 
   useEffect(() => {
     if (!range) {
@@ -98,6 +137,7 @@ export function TaskCalendarDashboard({
   }, [attempt, onAuthenticationRequired, range])
 
   const handleDatesSet = useCallback((info: DatesSetInfo) => {
+    calendarAPIRef.current = info.view.calendar
     const next = visibleCalendarRange(timeZone, info.start, info.end)
     setRange((current) => {
       if (current?.from === next.from && current.to === next.to) {
@@ -106,7 +146,21 @@ export function TaskCalendarDashboard({
       setLoadState({ status: 'loading' })
       return next
     })
-  }, [timeZone])
+
+    const view = fromFullCalendarView(info.view.type)
+    if (!view) {
+      return
+    }
+    const nextURLState = {
+      view,
+      date: calendarDateForInstant(info.view.calendar.getDate(), timeZone),
+    }
+    if (!hasCanonicalCalendarSearch(searchParams, nextURLState)) {
+      setSearchParams(calendarSearchParams(searchParams, nextURLState), {
+        replace: !hasCanonicalCalendarSearch(searchParams, calendarURLState),
+      })
+    }
+  }, [calendarURLState, searchParams, setSearchParams, timeZone])
 
   function replaceTask(updated: Task) {
     setLoadState((current) => current.status === 'loaded'
@@ -217,7 +271,8 @@ export function TaskCalendarDashboard({
             plugins={[monarchThemePlugin, dayGridPlugin, timeGridPlugin, interactionPlugin]}
             locale={ruLocale}
             timeZone={timeZone}
-            initialView={isMobile ? 'timeGridDay' : 'dayGridMonth'}
+            initialView={toFullCalendarView(calendarURLState.view)}
+            initialDate={calendarURLState.date}
             firstDay={1}
             height="auto"
             expandRows
