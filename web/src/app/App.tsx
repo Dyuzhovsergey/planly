@@ -4,6 +4,7 @@ import { LoginForm } from '../features/session/LoginForm'
 import { RegistrationForm } from '../features/session/RegistrationForm'
 import { useSession } from '../features/session/session-context'
 import { CalendarIcon, LogOutIcon } from '../shared/ui/icons'
+import { PlanlyLogo } from '../shared/ui/PlanlyLogo'
 
 const TaskCalendarDashboard = lazy(() =>
   import('../features/tasks/TaskCalendarDashboard').then((module) => ({
@@ -39,13 +40,7 @@ export function App() {
         <a className="planly-skip-link" href="#planly-workspace">Перейти к календарю</a>
         <div className="mx-auto grid min-h-dvh max-w-[1720px] lg:grid-cols-[14rem_minmax(0,1fr)]">
           <aside className="hidden border-r border-[var(--color-border)] bg-[var(--color-sidebar)] px-5 py-6 lg:flex lg:flex-col" aria-label="Основная навигация">
-            <div className="flex items-center gap-3">
-              <span className="grid size-10 place-items-center rounded-2xl bg-[var(--color-accent)] text-white shadow-sm"><CalendarIcon /></span>
-              <div>
-                <p className="text-lg font-bold tracking-tight">Planly</p>
-                <p className="text-xs text-[var(--color-muted)]">Ваш день в порядке</p>
-              </div>
-            </div>
+            <PlanlyLogo showTagline />
             <nav className="mt-10" aria-label="Разделы приложения">
               <span className="flex min-h-11 items-center gap-3 rounded-2xl bg-[var(--color-accent-soft)] px-3 text-sm font-semibold text-[var(--color-accent-strong)]" aria-current="page">
                 <CalendarIcon className="size-4" />Календарь
@@ -62,9 +57,7 @@ export function App() {
 
           <div className="min-w-0">
             <header className="flex items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-sidebar)] px-4 py-3 lg:hidden">
-              <div className="flex items-center gap-2.5 font-bold">
-                <span className="grid size-9 place-items-center rounded-xl bg-[var(--color-accent)] text-white"><CalendarIcon className="size-4" /></span>Planly
-              </div>
+              <PlanlyLogo compact />
               <button className="grid size-11 cursor-pointer place-items-center rounded-xl text-[var(--color-muted)] hover:bg-[var(--color-surface-muted)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]" type="button" aria-label="Выйти из мобильного интерфейса" disabled={isLoggingOut} onClick={handleLogout}><LogOutIcon /></button>
             </header>
             <div className="p-3 sm:p-5 lg:p-7" id="planly-workspace">
@@ -82,7 +75,7 @@ export function App() {
   return (
     <main className="grid min-h-dvh place-items-center bg-[var(--color-canvas)] px-4 py-10 sm:px-6">
       <section className="planly-card w-full max-w-xl p-8">
-        <div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-2xl bg-[var(--color-accent)] text-white"><CalendarIcon /></span><p className="font-bold tracking-tight">Planly</p></div>
+        <PlanlyLogo compact />
         <h1 className="mt-6 text-3xl font-semibold text-[var(--color-ink)]">{authMode === 'registration' ? 'Создайте аккаунт' : 'Войдите в Planly'}</h1>
         {state.status === 'loading' && <p className="mt-6 text-[var(--color-muted)]" role="status">Восстанавливаем сессию…</p>}
         {state.status === 'anonymous' && (

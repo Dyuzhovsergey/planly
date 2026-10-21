@@ -4,10 +4,10 @@
 
 ## Текущий статус
 
-- Стадия: Container stack smoke-test foundation принят пользователем.
-- Завершённые инкременты: MVP-контракт; Go HTTP-сервер с `GET /health`; PostgreSQL 18.6, миграция `users` и `GET /ready`; Auth foundation; session authentication и `GET /api/v1/me`; изменение часовой зоны через `PATCH /api/v1/me`; Task storage foundation; Task creation API; Task retrieval API; Task list API; Task update API; Task completion API; Task delete API; Frontend foundation; Frontend login/logout; Frontend registration; Frontend automatic time zone; Frontend task creation UI; Frontend task list foundation; Frontend calendar dashboard and task rescheduling; Password policy 8–128; Frontend task completion UI; Frontend task delete UI; Frontend task content editing UI; Containerized API foundation; Frontend container and local reverse proxy foundation; Container stack smoke-test foundation.
-- Текущий инкремент: Brand assets foundation.
-- Следующее действие: подготовить компактный логотип и favicon на основе согласованной монограммы из `image.svg`.
+- Стадия: Brand assets foundation принят пользователем.
+- Завершённые инкременты: MVP-контракт; Go HTTP-сервер с `GET /health`; PostgreSQL 18.6, миграция `users` и `GET /ready`; Auth foundation; session authentication и `GET /api/v1/me`; изменение часовой зоны через `PATCH /api/v1/me`; Task storage foundation; Task creation API; Task retrieval API; Task list API; Task update API; Task completion API; Task delete API; Frontend foundation; Frontend login/logout; Frontend registration; Frontend automatic time zone; Frontend task creation UI; Frontend task list foundation; Frontend calendar dashboard and task rescheduling; Password policy 8–128; Frontend task completion UI; Frontend task delete UI; Frontend task content editing UI; Containerized API foundation; Frontend container and local reverse proxy foundation; Container stack smoke-test foundation; Brand assets foundation.
+- Текущий инкремент: не выбран; предложен Frontend routing foundation.
+- Следующее действие: согласовать маршруты `/login`, `/register` и `/app` с защитой authenticated-экрана.
 
 ## Предварительная последовательность
 
@@ -422,3 +422,13 @@
 **Проверка и критерии готовности:** `sh -n scripts/smoke-compose.sh`, `git diff --check`, `docker compose config --quiet` и реальный запуск скрипта должны завершаться успешно. Ошибка любого обязательного сервиса или HTTP-контракта должна давать ненулевой exit code и короткое диагностическое сообщение.
 
 **Статус:** принят пользователем после успешного ручного запуска и сообщения `all container stack smoke checks passed`.
+
+### Brand assets foundation
+
+**Цель и границы:** подготовить из выбранного пользователем знака масштабируемый master-SVG Planly и favicon, не меняя принятую структуру dashboard и цветовые токены интерфейса.
+
+**Архитектурные решения:** исходная форма букв `PL`, градиент зелёный → фиолетовый → оранжевый и мягкий объём сохранены в векторном представлении. Белый фон удалён, а `viewBox` плотно ограничивает знак; один прозрачный master-SVG используется React-компонентом в authenticated, mobile и auth-интерфейсах, а также как favicon. PNG сохранён как резервный raster-asset. Изображение декоративное рядом с видимым текстом `Planly`, поэтому имеет пустой `alt`; название бренда остаётся доступным для assistive technologies.
+
+**Проверка и критерии готовности:** компонентный тест проверяет название, tagline и декоративное изображение; frontend lint/test/build и Docker-сборка должны включать SVG из `public`. В браузере логотип должен оставаться читаемым в auth/sidebar/mobile вариантах, масштабироваться без потери качества, а favicon — отображаться во вкладке без обрезания.
+
+**Статус:** принят пользователем после ручной проверки логотипа в auth-интерфейсе, боковой панели, мобильной шапке и favicon во вкладке браузера.
