@@ -82,12 +82,12 @@ Web (React + TypeScript) ----\
 
 - Multi-stage `Dockerfile` собирает статические `planly-api` и `planly-migrate` в Go builder-слое. Runtime основан на минимальном Alpine, содержит только оба бинарника, CA-сертификаты и IANA `tzdata` и запускается от непривилегированного пользователя `planly`.
 - `.dockerignore` использует allow-list и передаёт builder только Go-модули, `cmd`, `internal` и embedded-миграции; локальные `.env`, frontend, документация и Git metadata не входят в build context.
-- Docker Compose сохраняет существующий PostgreSQL volume и запускает цепочку `postgres healthy → migrate exited 0 → api`. Миграции остаются отдельным одноразовым процессом, а не частью старта HTTP-сервера. API подключается к `postgres:5432` по внутренней сети и имеет readiness healthcheck через `GET /ready`.
-- Контейнеры приложения работают с read-only root filesystem, временным `/tmp`, без Linux capabilities и с `no-new-privileges`. API публикуется только на loopback хоста; `SIGTERM` проходит напрямую в Go-процесс и использует существующее graceful shutdown.
+- Docker Compose сохраняет существующий PostgreSQL volume и запускает цепочку `postgres healthy → migrate exited 0 → api healthy → web`. Миграции остаются отдельным одноразовым процессом, а не частью старта HTTP-сервера. API подключается к `postgres:5432` по внутренней сети и имеет readiness healthcheck через `GET /ready`.
+- Frontend собирается в Node builder-слое и раздаётся непривилегированным Nginx как статические файлы. Browser обращается к единому origin `http://localhost:5173`: `/api` без изменения пути проксируется на `api:8080`, а остальные пути получают SPA fallback. Vite proxy сохраняется как отдельный режим разработки.
+- Контейнеры приложения работают с read-only root filesystem, временным `/tmp`, без Linux capabilities и с `no-new-privileges`. Web и API публикуются только на loopback хоста; прямой порт API сохраняется для локальной диагностики. `SIGTERM` проходит напрямую в Go-процесс и использует существующее graceful shutdown.
 - Запуск `go run ./cmd/migrate up` и `go run ./cmd/api` на хосте сохраняется как альтернативный workflow разработки.
-- В продакшене можно обслуживать собранный frontend как статические файлы через веб-сервер/прокси, а Go API запускать отдельным контейнером.
 - PostgreSQL использует постоянное хранилище; резервное копирование и обновления необходимо спроектировать до публичного запуска.
-- Frontend-контейнер, reverse proxy, HTTPS, production secrets, публикация образов и CI/CD пока не спроектированы.
+- HTTPS, production secrets, публикация образов и CI/CD пока не спроектированы.
 
 ## Будущая интеграция с Алисой
 

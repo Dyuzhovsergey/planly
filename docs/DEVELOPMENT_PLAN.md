@@ -4,10 +4,10 @@
 
 ## Текущий статус
 
-- Стадия: Containerized API foundation принят пользователем.
-- Завершённые инкременты: MVP-контракт; Go HTTP-сервер с `GET /health`; PostgreSQL 18.6, миграция `users` и `GET /ready`; Auth foundation; session authentication и `GET /api/v1/me`; изменение часовой зоны через `PATCH /api/v1/me`; Task storage foundation; Task creation API; Task retrieval API; Task list API; Task update API; Task completion API; Task delete API; Frontend foundation; Frontend login/logout; Frontend registration; Frontend automatic time zone; Frontend task creation UI; Frontend task list foundation; Frontend calendar dashboard and task rescheduling; Password policy 8–128; Frontend task completion UI; Frontend task delete UI; Frontend task content editing UI; Containerized API foundation.
-- Текущий инкремент: отсутствует; следующим предлагается Frontend container and local reverse proxy foundation.
-- Следующее действие: согласовать production-сборку Vite, контейнер статических файлов и единый локальный origin с проксированием `/api` в Compose без HTTPS и публикации.
+- Стадия: Frontend container and local reverse proxy foundation принят пользователем.
+- Завершённые инкременты: MVP-контракт; Go HTTP-сервер с `GET /health`; PostgreSQL 18.6, миграция `users` и `GET /ready`; Auth foundation; session authentication и `GET /api/v1/me`; изменение часовой зоны через `PATCH /api/v1/me`; Task storage foundation; Task creation API; Task retrieval API; Task list API; Task update API; Task completion API; Task delete API; Frontend foundation; Frontend login/logout; Frontend registration; Frontend automatic time zone; Frontend task creation UI; Frontend task list foundation; Frontend calendar dashboard and task rescheduling; Password policy 8–128; Frontend task completion UI; Frontend task delete UI; Frontend task content editing UI; Containerized API foundation; Frontend container and local reverse proxy foundation.
+- Текущий инкремент: отсутствует; следующим предлагается Container stack smoke-test foundation.
+- Следующее действие: согласовать небольшой воспроизводимый smoke-test всего Compose-стека без CI/CD и production deployment.
 
 ## Предварительная последовательность
 
@@ -18,7 +18,7 @@
 - [x] Реализовать защищённое хранилище задач и обязательную серверную изоляцию пользовательских данных (storage, создание, получение, список, изменение, завершение и удаление приняты пользователем).
 - [ ] Создать React + TypeScript + Vite UI с Tailwind CSS + shadcn/ui (foundation, auth UI и основной task CRUD без shadcn/ui приняты; дальнейшее расширение дизайн-системы отдельно не согласовано).
 - [x] Выбрать FullCalendar Standard v7 и реализовать виды месяц / неделя / день с переносом активных задач.
-- [ ] Дополнить Docker Compose контейнерами приложения и настроить безопасное веб-развёртывание (API foundation принят; frontend-контейнер, reverse proxy, HTTPS и production deployment ещё не согласованы).
+- [ ] Дополнить Docker Compose контейнерами приложения и настроить безопасное веб-развёртывание (локальные API/frontend-контейнеры и reverse proxy приняты; HTTPS и production deployment не реализованы).
 - [ ] Отдельно спроектировать и проверить интеграцию с Яндекс Алисой.
 
 Порядок можно пересматривать после обсуждения, без автоматического перехода к следующему пункту.
@@ -402,3 +402,13 @@
 **Проверка и критерии готовности:** должны проходить Go test/race/vet/build, `docker compose config --quiet` и реальная сборка образа. Smoke-тест подтверждает `migrate` с кодом `0`, healthy PostgreSQL/API, ответы `200` от `/health` и `/ready`, uid непривилегированного пользователя, наличие tzdata/CA, read-only runtime и корректные логи graceful shutdown после `docker compose stop api`.
 
 **Статус:** принят пользователем после ручной проверки сборки, `migrate` с кодом `0`, healthy PostgreSQL/API, `/health`, `/ready`, работы frontend с контейнерным API и graceful shutdown.
+
+### Frontend container and local reverse proxy foundation
+
+**Цель и границы:** запускать production-сборку Vite вместе с backend одной Compose-командой. Frontend-контейнер раздаёт статические файлы и проксирует `/api` на существующий сервис API; backend, БД, HTTPS, secrets, публикация и CI/CD не меняются.
+
+**Архитектурные решения:** multi-stage `web/Dockerfile` собирает `dist` в Node 22, после чего непривилегированный Nginx слушает внутренний порт `8080`. Compose публикует web только на `127.0.0.1:5173`, запускает его после healthy API и применяет read-only filesystem, `/tmp`, `cap_drop: ALL` и `no-new-privileges`. Относительный `/api` сохраняет единый browser origin, session-cookie, исходный `Origin` и существующую CSRF-защиту. Vite proxy остаётся режимом разработки; одновременно с web-контейнером он не запускается из-за общего host-порта.
+
+**Проверка и критерии готовности:** frontend lint/test/build, стандартные Go-проверки, Compose validation и сборка образов должны пройти. Smoke-тест подтверждает healthy web, `200` для `/`, `401` JSON для анонимного `/api/v1/me` через proxy, прямой `/health`, непривилегированный read-only runtime и передачу session-cookie/Origin. Инкремент считается принятым после браузерной проверки регистрации, входа, восстановления сессии и операций с задачами через `http://localhost:5173`.
+
+**Статус:** принят пользователем после ручной проверки запуска через Docker Compose, регистрации, входа, восстановления сессии и полного набора операций с задачами через единый origin `http://localhost:5173`.
