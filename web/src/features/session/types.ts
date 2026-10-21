@@ -1,5 +1,6 @@
 export interface User {
   id: string
+  username: string
   email: string
   timeZone: string
   createdAt: string
@@ -11,11 +12,12 @@ export interface AuthEnvelope {
 }
 
 export interface LoginCredentials {
-  email: string
+  username: string
   password: string
 }
 
 export interface RegistrationInput {
+  username: string
   email: string
   password: string
   timeZone: string

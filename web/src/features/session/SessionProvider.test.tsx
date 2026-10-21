@@ -31,6 +31,7 @@ vi.mock('../tasks/TaskCalendarDashboard', async () => {
 const authEnvelope = {
   user: {
     id: 'user-id',
+    username: 'sergey',
     email: 'user@example.com',
     timeZone: 'Europe/Moscow',
     createdAt: '2026-10-15T08:00:00Z',
@@ -79,8 +80,8 @@ function authenticationRequiredResponse() {
   )
 }
 
-async function fillAndSubmitLogin(email = 'user@example.com', password = 'password') {
-  fireEvent.change(await screen.findByLabelText('Email'), { target: { value: email } })
+async function fillAndSubmitLogin(username = 'sergey', password = 'password') {
+  fireEvent.change(await screen.findByLabelText('Логин'), { target: { value: username } })
   fireEvent.change(screen.getByLabelText('Пароль'), { target: { value: password } })
   fireEvent.click(screen.getByRole('button', { name: 'Войти' }))
 }
@@ -91,9 +92,11 @@ async function openRegistrationForm() {
 }
 
 async function fillAndSubmitRegistration(
+  username = 'new.user',
   email = 'new-user@example.com',
   password = 'correct horse battery staple',
 ) {
+  fireEvent.change(screen.getByLabelText('Логин'), { target: { value: username } })
   fireEvent.change(screen.getByLabelText('Email'), { target: { value: email } })
   fireEvent.change(screen.getByLabelText('Пароль'), { target: { value: password } })
   fireEvent.click(screen.getByRole('button', { name: 'Создать аккаунт' }))
@@ -123,7 +126,7 @@ describe('session restoration', () => {
 
     renderApplication()
 
-    expect(await screen.findByText('user@example.com')).toBeInTheDocument()
+    expect(await screen.findByText('sergey')).toBeInTheDocument()
     await expectLocation('/app')
     expect(screen.queryByText(/Часовая зона/)).not.toBeInTheDocument()
     expect(screen.queryByText(authEnvelope.csrfToken)).not.toBeInTheDocument()
@@ -156,7 +159,7 @@ describe('session restoration', () => {
     )
     fireEvent.click(screen.getByRole('button', { name: 'Повторить' }))
 
-    expect(await screen.findByText('user@example.com')).toBeInTheDocument()
+    expect(await screen.findByText('sergey')).toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
@@ -170,7 +173,7 @@ describe('session restoration', () => {
     renderApplication()
     await fillAndSubmitLogin()
 
-    expect(await screen.findByText('user@example.com')).toBeInTheDocument()
+    expect(await screen.findByText('sergey')).toBeInTheDocument()
     await expectLocation('/app')
     expect(fetchMock).toHaveBeenCalledTimes(2)
     const [path, init] = fetchMock.mock.calls[1]
@@ -178,7 +181,7 @@ describe('session restoration', () => {
     expect(init).toEqual(expect.objectContaining({ method: 'POST', credentials: 'include' }))
     expect(new Headers(init.headers).get('Content-Type')).toBe('application/json')
     expect(JSON.parse(init.body as string)).toEqual({
-      email: 'user@example.com',
+      username: 'sergey',
       password: 'password',
     })
   })
@@ -204,9 +207,9 @@ describe('session restoration', () => {
     await fillAndSubmitLogin()
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Неверный email или пароль',
+      'Неверный логин или пароль',
     )
-    expect(screen.getByLabelText('Email')).toBeEnabled()
+    expect(screen.getByLabelText('Логин')).toBeEnabled()
     expect(screen.getByLabelText('Пароль')).toBeEnabled()
   })
 
@@ -222,7 +225,7 @@ describe('session restoration', () => {
             status: 422,
             code: 'validation_failed',
             errors: {
-              email: ['email is invalid'],
+              username: ['username is invalid'],
               password: ['password is required'],
             },
           },
@@ -232,11 +235,11 @@ describe('session restoration', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     renderApplication()
-    await fillAndSubmitLogin('not-an-email', '')
+    await fillAndSubmitLogin('bad username', '')
 
-    expect(await screen.findByText('email is invalid')).toBeInTheDocument()
+    expect(await screen.findByText('username is invalid')).toBeInTheDocument()
     expect(screen.getByText('password is required')).toBeInTheDocument()
-    expect(screen.getByLabelText('Email')).toHaveFocus()
+    expect(screen.getByLabelText('Логин')).toHaveFocus()
   })
 
   it('shows a recoverable login error and prevents repeated submission', async () => {
@@ -303,9 +306,9 @@ describe('session restoration', () => {
 
     renderApplication()
     await openRegistrationForm()
-    await fillAndSubmitRegistration('new-user@example.com', '12345678')
+    await fillAndSubmitRegistration('new.user', 'new-user@example.com', '12345678')
 
-    expect(await screen.findByText('user@example.com')).toBeInTheDocument()
+    expect(await screen.findByText('sergey')).toBeInTheDocument()
     await expectLocation('/app')
     expect(fetchMock).toHaveBeenCalledTimes(2)
     const [path, init] = fetchMock.mock.calls[1]
@@ -313,6 +316,7 @@ describe('session restoration', () => {
     expect(init).toEqual(expect.objectContaining({ method: 'POST', credentials: 'include' }))
     expect(new Headers(init.headers).get('Content-Type')).toBe('application/json')
     expect(JSON.parse(init.body as string)).toEqual({
+      username: 'new.user',
       email: 'new-user@example.com',
       password: '12345678',
       timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -333,6 +337,7 @@ describe('session restoration', () => {
             status: 422,
             code: 'validation_failed',
             errors: {
+              username: ['must be a valid username'],
               email: ['must be a valid email address'],
               password: ['must contain between 8 and 128 characters'],
             },
@@ -344,11 +349,12 @@ describe('session restoration', () => {
 
     renderApplication()
     await openRegistrationForm()
-    await fillAndSubmitRegistration('not-an-email', 'short')
+    await fillAndSubmitRegistration('_bad_', 'not-an-email', 'short')
 
+    expect(await screen.findByText('must be a valid username')).toBeInTheDocument()
     expect(await screen.findByText('must be a valid email address')).toBeInTheDocument()
     expect(screen.getByText('must contain between 8 and 128 characters')).toBeInTheDocument()
-    expect(screen.getByLabelText('Email')).toHaveFocus()
+    expect(screen.getByLabelText('Логин')).toHaveFocus()
   })
 
   it('uses Europe/Moscow without showing a field when browser detection fails', async () => {
@@ -365,9 +371,10 @@ describe('session restoration', () => {
     await openRegistrationForm()
     await fillAndSubmitRegistration()
 
-    expect(await screen.findByText('user@example.com')).toBeInTheDocument()
+    expect(await screen.findByText('sergey')).toBeInTheDocument()
     const [, init] = fetchMock.mock.calls[1]
     expect(JSON.parse(init.body as string)).toEqual({
+      username: 'new.user',
       email: 'new-user@example.com',
       password: 'correct horse battery staple',
       timeZone: 'Europe/Moscow',
@@ -398,6 +405,31 @@ describe('session restoration', () => {
 
     expect(await screen.findByText('Пользователь с таким email уже зарегистрирован.')).toBeInTheDocument()
     expect(screen.getByLabelText('Email')).toHaveFocus()
+  })
+
+  it('shows a username conflict next to username and focuses it', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(authenticationRequiredResponse())
+      .mockResolvedValueOnce(
+        jsonResponse(
+          {
+            type: 'about:blank',
+            title: 'Conflict',
+            status: 409,
+            code: 'username_already_registered',
+          },
+          409,
+        ),
+      )
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderApplication()
+    await openRegistrationForm()
+    await fillAndSubmitRegistration()
+
+    expect(await screen.findByText('Этот логин уже занят.')).toBeInTheDocument()
+    expect(screen.getByLabelText('Логин')).toHaveFocus()
   })
 
   it('shows a recoverable registration error and prevents repeated submission', async () => {
@@ -453,7 +485,7 @@ describe('session restoration', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Выйти' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Не удалось выйти')
-    expect(screen.getByText('user@example.com')).toBeInTheDocument()
+    expect(screen.getByText('sergey')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Выйти' })).toBeEnabled()
   })
 
@@ -466,7 +498,7 @@ describe('session restoration', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     renderApplication()
-    await screen.findByText('user@example.com')
+    await screen.findByText('sergey')
     fireEvent.change(screen.getByLabelText('Название'), {
       target: { value: 'Позвонить врачу' },
     })

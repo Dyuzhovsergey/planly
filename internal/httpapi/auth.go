@@ -41,13 +41,14 @@ type authHandler struct {
 }
 
 type registerRequest struct {
+	Username string `json:"username"`
 	Email    string `json:"email"`
 	Password string `json:"password"`
 	TimeZone string `json:"timeZone"`
 }
 
 type loginRequest struct {
-	Email    string `json:"email"`
+	Username string `json:"username"`
 	Password string `json:"password"`
 }
 
@@ -58,6 +59,7 @@ type authResponse struct {
 
 type userResponse struct {
 	ID        string    `json:"id"`
+	Username  string    `json:"username"`
 	Email     string    `json:"email"`
 	TimeZone  string    `json:"timeZone"`
 	CreatedAt time.Time `json:"createdAt"`
@@ -89,6 +91,7 @@ func (handler *authHandler) register(response http.ResponseWriter, request *http
 	}
 
 	result, err := handler.service.Register(request.Context(), auth.RegisterInput{
+		Username: body.Username,
 		Email:    body.Email,
 		Password: body.Password,
 		TimeZone: body.TimeZone,
@@ -115,7 +118,7 @@ func (handler *authHandler) login(response http.ResponseWriter, request *http.Re
 	}
 
 	result, err := handler.service.Login(request.Context(), auth.LoginInput{
-		Email:    body.Email,
+		Username: body.Username,
 		Password: body.Password,
 	})
 	if err != nil {
@@ -185,6 +188,8 @@ func (handler *authHandler) writeAuthError(response http.ResponseWriter, err err
 		writeProblemWithErrors(response, http.StatusUnprocessableEntity, "validation_failed", validationErr.Fields)
 	case errors.Is(err, auth.ErrEmailTaken):
 		writeProblem(response, http.StatusConflict, "email_already_registered")
+	case errors.Is(err, auth.ErrUsernameTaken):
+		writeProblem(response, http.StatusConflict, "username_already_registered")
 	case errors.Is(err, auth.ErrInvalidCredentials):
 		writeProblem(response, http.StatusUnauthorized, "invalid_credentials")
 	case errors.Is(err, auth.ErrUnauthenticated):
@@ -220,6 +225,7 @@ func makeAuthResponse(result auth.AuthResult) authResponse {
 func makeUserResponse(user auth.User) userResponse {
 	return userResponse{
 		ID:        user.ID,
+		Username:  user.Username,
 		Email:     user.Email,
 		TimeZone:  user.TimeZone,
 		CreatedAt: user.CreatedAt.UTC(),

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net/mail"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -13,9 +14,13 @@ import (
 const (
 	minimumPasswordLength = 8
 	maximumPasswordLength = 128
+	minimumUsernameLength = 3
+	maximumUsernameLength = 32
 	maximumEmailLength    = 254
 	sessionLifetime       = 30 * 24 * time.Hour
 )
+
+var usernamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*[a-z0-9]$`)
 
 // Service applies authentication rules independently of HTTP and PostgreSQL.
 type Service struct {
@@ -46,9 +51,10 @@ func NewService(repository Repository) (*Service, error) {
 
 // Register validates a user and atomically persists the user with their first session.
 func (service *Service) Register(ctx context.Context, input RegisterInput) (AuthResult, error) {
+	username := normalizeUsername(input.Username)
 	email := normalizeEmail(input.Email)
 	timeZone := strings.TrimSpace(input.TimeZone)
-	if validationErr := validateRegistration(email, input.Password, timeZone); validationErr != nil {
+	if validationErr := validateRegistration(username, email, input.Password, timeZone); validationErr != nil {
 		return AuthResult{}, validationErr
 	}
 
@@ -63,6 +69,7 @@ func (service *Service) Register(ctx context.Context, input RegisterInput) (Auth
 	}
 
 	user, err := service.repository.CreateUserAndSession(ctx, CreateUserParams{
+		Username:     username,
 		Email:        email,
 		PasswordHash: passwordHash,
 		TimeZone:     timeZone,
@@ -81,12 +88,12 @@ func (service *Service) Register(ctx context.Context, input RegisterInput) (Auth
 
 // Login verifies credentials and creates a new independent session.
 func (service *Service) Login(ctx context.Context, input LoginInput) (AuthResult, error) {
-	email := normalizeEmail(input.Email)
-	if email == "" || input.Password == "" {
+	username := normalizeUsername(input.Username)
+	if username == "" || input.Password == "" {
 		return AuthResult{}, ErrInvalidCredentials
 	}
 
-	user, err := service.repository.FindUserByEmail(ctx, email)
+	user, err := service.repository.FindUserByUsername(ctx, username)
 	if errors.Is(err, ErrNotFound) {
 		_, _ = service.passwords.Verify(input.Password, service.dummyHash)
 		return AuthResult{}, ErrInvalidCredentials
@@ -226,9 +233,16 @@ func normalizeEmail(email string) string {
 	return strings.ToLower(strings.TrimSpace(email))
 }
 
-func validateRegistration(email, password, timeZone string) *ValidationError {
+func normalizeUsername(username string) string {
+	return strings.ToLower(strings.TrimSpace(username))
+}
+
+func validateRegistration(username, email, password, timeZone string) *ValidationError {
 	fields := make(map[string][]string)
 
+	if length := len(username); length < minimumUsernameLength || length > maximumUsernameLength || !usernamePattern.MatchString(username) {
+		fields["username"] = []string{"must contain 3 to 32 lowercase Latin letters, digits, dots, underscores, or hyphens and start and end with a letter or digit"}
+	}
 	parsedEmail, err := mail.ParseAddress(email)
 	if err != nil || parsedEmail.Address != email || len(email) > maximumEmailLength {
 		fields["email"] = []string{"must be a valid email address"}

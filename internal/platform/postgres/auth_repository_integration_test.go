@@ -28,6 +28,8 @@ func TestAuthRepositoryIntegration(t *testing.T) {
 
 	repository := NewAuthRepository(pool)
 	suffix := time.Now().UnixNano()
+	firstUsername := fmt.Sprintf("repository_%d", suffix)
+	rollbackUsername := fmt.Sprintf("rollback_%d", suffix)
 	firstEmail := fmt.Sprintf("repository-%d@example.com", suffix)
 	rollbackEmail := fmt.Sprintf("rollback-%d@example.com", suffix)
 	defer func() {
@@ -42,6 +44,7 @@ func TestAuthRepositoryIntegration(t *testing.T) {
 		ExpiresAt:     createdAt.Add(30 * 24 * time.Hour),
 	}
 	user, err := repository.CreateUserAndSession(ctx, auth.CreateUserParams{
+		Username:     firstUsername,
 		Email:        firstEmail,
 		PasswordHash: "argon2id-test-hash",
 		TimeZone:     "Europe/Moscow",
@@ -53,9 +56,9 @@ func TestAuthRepositoryIntegration(t *testing.T) {
 		t.Fatal("created user has empty ID")
 	}
 
-	foundUser, err := repository.FindUserByEmail(ctx, firstEmail)
+	foundUser, err := repository.FindUserByUsername(ctx, firstUsername)
 	if err != nil {
-		t.Fatalf("FindUserByEmail() error = %v", err)
+		t.Fatalf("FindUserByUsername() error = %v", err)
 	}
 	if foundUser.ID != user.ID {
 		t.Errorf("found user ID = %q, want %q", foundUser.ID, user.ID)
@@ -108,6 +111,7 @@ func TestAuthRepositoryIntegration(t *testing.T) {
 		ExpiresAt:     createdAt.Add(30 * 24 * time.Hour),
 	}
 	_, err = repository.CreateUserAndSession(ctx, auth.CreateUserParams{
+		Username:     fmt.Sprintf("email_%d", suffix),
 		Email:        firstEmail,
 		PasswordHash: "another-argon2id-test-hash",
 		TimeZone:     "Europe/Moscow",
@@ -117,6 +121,17 @@ func TestAuthRepositoryIntegration(t *testing.T) {
 	}
 
 	_, err = repository.CreateUserAndSession(ctx, auth.CreateUserParams{
+		Username:     firstUsername,
+		Email:        fmt.Sprintf("username-conflict-%d@example.com", suffix),
+		PasswordHash: "another-argon2id-test-hash",
+		TimeZone:     "Europe/Moscow",
+	}, conflictingSession)
+	if !errors.Is(err, auth.ErrUsernameTaken) {
+		t.Fatalf("duplicate username error = %v, want ErrUsernameTaken", err)
+	}
+
+	_, err = repository.CreateUserAndSession(ctx, auth.CreateUserParams{
+		Username:     rollbackUsername,
 		Email:        rollbackEmail,
 		PasswordHash: "argon2id-test-hash",
 		TimeZone:     "Europe/Moscow",
@@ -124,7 +139,7 @@ func TestAuthRepositoryIntegration(t *testing.T) {
 	if err == nil {
 		t.Fatal("CreateUserAndSession() with duplicate session hash error = nil")
 	}
-	if _, err := repository.FindUserByEmail(ctx, rollbackEmail); !errors.Is(err, auth.ErrNotFound) {
+	if _, err := repository.FindUserByUsername(ctx, rollbackUsername); !errors.Is(err, auth.ErrNotFound) {
 		t.Fatalf("rolled-back user lookup error = %v, want ErrNotFound", err)
 	}
 

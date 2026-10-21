@@ -9,11 +9,13 @@ interface RegistrationFormProps {
 }
 
 interface FieldErrors {
+  username?: string
   email?: string
   password?: string
 }
 
 export function RegistrationForm({ onRegister }: RegistrationFormProps) {
+  const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -21,6 +23,7 @@ export function RegistrationForm({ onRegister }: RegistrationFormProps) {
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [formError, setFormError] = useState<string | null>(null)
   const [fieldToFocus, setFieldToFocus] = useState<keyof FieldErrors | null>(null)
+  const usernameInput = useRef<HTMLInputElement>(null)
   const emailInput = useRef<HTMLInputElement>(null)
   const passwordInput = useRef<HTMLInputElement>(null)
 
@@ -28,7 +31,9 @@ export function RegistrationForm({ onRegister }: RegistrationFormProps) {
     if (isSubmitting) {
       return
     }
-    if (fieldToFocus === 'email') {
+    if (fieldToFocus === 'username') {
+      usernameInput.current?.focus()
+    } else if (fieldToFocus === 'email') {
       emailInput.current?.focus()
     } else if (fieldToFocus === 'password') {
       passwordInput.current?.focus()
@@ -48,12 +53,19 @@ export function RegistrationForm({ onRegister }: RegistrationFormProps) {
 
     try {
       await onRegister({
+        username,
         email,
         password,
         timeZone: browserTimeZoneAdapter.getCurrentTimeZone(),
       })
     } catch (error: unknown) {
       if (
+        error instanceof ApiError &&
+        error.problem?.code === 'username_already_registered'
+      ) {
+        setFieldErrors({ username: 'Этот логин уже занят.' })
+        setFieldToFocus('username')
+      } else if (
         error instanceof ApiError &&
         error.problem?.code === 'email_already_registered'
       ) {
@@ -65,11 +77,14 @@ export function RegistrationForm({ onRegister }: RegistrationFormProps) {
       ) {
         const errors = error.problem.errors ?? {}
         const nextErrors = {
+          username: errors.username?.[0],
           email: errors.email?.[0],
           password: errors.password?.[0],
         }
         setFieldErrors(nextErrors)
-        if (nextErrors.email) {
+        if (nextErrors.username) {
+          setFieldToFocus('username')
+        } else if (nextErrors.email) {
           setFieldToFocus('email')
         } else if (nextErrors.password) {
           setFieldToFocus('password')
@@ -95,6 +110,43 @@ export function RegistrationForm({ onRegister }: RegistrationFormProps) {
       onSubmit={handleSubmit}
       aria-busy={isSubmitting}
     >
+      <div>
+        <label
+          className="block text-sm font-medium text-slate-800"
+          htmlFor="registration-username"
+        >
+          Логин
+        </label>
+        <input
+          ref={usernameInput}
+          className="planly-input mt-2"
+          id="registration-username"
+          name="username"
+          type="text"
+          autoComplete="username"
+          minLength={3}
+          maxLength={32}
+          required
+          disabled={isSubmitting}
+          value={username}
+          aria-invalid={Boolean(fieldErrors.username)}
+          aria-describedby={fieldErrors.username ? 'registration-username-error' : 'registration-username-help'}
+          onChange={(event) => setUsername(event.target.value)}
+        />
+        <p className="mt-2 text-sm text-slate-600" id="registration-username-help">
+          3–32 символа: латинские буквы, цифры, точка, дефис или подчёркивание.
+        </p>
+        {fieldErrors.username && (
+          <p
+            className="mt-2 text-sm text-red-700"
+            id="registration-username-error"
+            role="alert"
+          >
+            {fieldErrors.username}
+          </p>
+        )}
+      </div>
+
       <div>
         <label
           className="block text-sm font-medium text-slate-800"

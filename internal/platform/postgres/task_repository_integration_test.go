@@ -451,8 +451,8 @@ func insertTaskTestUser(t *testing.T, ctx context.Context, pool *pgxpool.Pool, e
 
 	var userID string
 	if err := pool.QueryRow(ctx, `
-		INSERT INTO users (email, password_hash, time_zone)
-		VALUES ($1, 'argon2id-test-hash', 'Europe/Moscow')
+		INSERT INTO users (username, email, password_hash, time_zone)
+		VALUES ('task_' || left(md5($1), 20), $1, 'argon2id-test-hash', 'Europe/Moscow')
 		RETURNING id
 	`, email).Scan(&userID); err != nil {
 		t.Fatalf("insert task test user: %v", err)

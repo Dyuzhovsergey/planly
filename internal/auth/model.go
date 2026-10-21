@@ -9,7 +9,9 @@ import (
 var (
 	// ErrEmailTaken indicates that a normalized email already belongs to a user.
 	ErrEmailTaken = errors.New("email is already registered")
-	// ErrInvalidCredentials intentionally covers both an unknown email and a wrong password.
+	// ErrUsernameTaken indicates that a normalized username already belongs to a user.
+	ErrUsernameTaken = errors.New("username is already registered")
+	// ErrInvalidCredentials intentionally covers both an unknown username and a wrong password.
 	ErrInvalidCredentials = errors.New("invalid credentials")
 	// ErrUnauthenticated indicates that a session is missing, expired, or unknown.
 	ErrUnauthenticated = errors.New("authentication required")
@@ -22,6 +24,7 @@ var (
 // User is the authentication-facing representation of a Planly user.
 type User struct {
 	ID           string
+	Username     string
 	Email        string
 	PasswordHash string
 	TimeZone     string
@@ -60,6 +63,7 @@ type AuthResult struct {
 
 // RegisterInput contains registration fields supplied by a client.
 type RegisterInput struct {
+	Username string
 	Email    string
 	Password string
 	TimeZone string
@@ -67,7 +71,7 @@ type RegisterInput struct {
 
 // LoginInput contains credentials supplied by a client.
 type LoginInput struct {
-	Email    string
+	Username string
 	Password string
 }
 

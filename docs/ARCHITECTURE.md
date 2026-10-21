@@ -44,7 +44,7 @@ Web (React + TypeScript) ----\
 
 ## Аутентификация
 
-- Пользователь входит по email и паролю; пароль хранится только как хеш Argon2id.
+- При регистрации backend нормализует и сохраняет уникальные `username` и email; пользователь входит по username и паролю, а пароль хранится только как хеш Argon2id. Неизвестный username и неверный пароль дают одинаковый `invalid_credentials`.
 - HTTP handlers отвечают за JSON, Origin, CSRF и cookie; auth service — за валидацию, пароли и срок сессии; PostgreSQL repository — за SQL и транзакции.
 - После регистрации или входа сервер создаёт непрозрачную сессию, хранит в PostgreSQL хеш её токена и отправляет исходный токен в cookie.
 - Reusable HTTP middleware восстанавливает доверенную личность по session-cookie, а handlers защищённых endpoints получают её из `request.Context` и не принимают `user_id` от клиента.

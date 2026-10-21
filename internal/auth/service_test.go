@@ -26,6 +26,7 @@ type fakeRepository struct {
 	updatedUserID      string
 	updatedTimeZone    string
 	updatedUser        User
+	foundUsername      string
 }
 
 func (repository *fakeRepository) CreateUserAndSession(_ context.Context, params CreateUserParams, session Session) (User, error) {
@@ -33,13 +34,15 @@ func (repository *fakeRepository) CreateUserAndSession(_ context.Context, params
 		return User{}, repository.createUserErr
 	}
 	repository.session = session
+	repository.user.Username = params.Username
 	repository.user.Email = params.Email
 	repository.user.PasswordHash = params.PasswordHash
 	repository.user.TimeZone = params.TimeZone
 	return repository.user, nil
 }
 
-func (repository *fakeRepository) FindUserByEmail(context.Context, string) (User, error) {
+func (repository *fakeRepository) FindUserByUsername(_ context.Context, username string) (User, error) {
+	repository.foundUsername = username
 	return repository.user, repository.findUserErr
 }
 
@@ -78,6 +81,7 @@ func TestRegisterNormalizesEmailAndCreatesSession(t *testing.T) {
 	service := newTestService(t, repository, now)
 
 	result, err := service.Register(context.Background(), RegisterInput{
+		Username: "  Sergey.Planly  ",
 		Email:    "  USER@Example.COM ",
 		Password: "correct horse battery staple",
 		TimeZone: "Europe/Moscow",
@@ -87,6 +91,9 @@ func TestRegisterNormalizesEmailAndCreatesSession(t *testing.T) {
 	}
 	if result.User.Email != "user@example.com" {
 		t.Errorf("email = %q, want normalized email", result.User.Email)
+	}
+	if result.User.Username != "sergey.planly" {
+		t.Errorf("username = %q, want normalized username", result.User.Username)
 	}
 	if result.SessionToken == "" || result.CSRFToken == "" {
 		t.Fatal("Register() returned empty client tokens")
@@ -109,6 +116,7 @@ func TestRegisterValidatesInput(t *testing.T) {
 	service := newTestService(t, &fakeRepository{}, time.Now())
 
 	_, err := service.Register(context.Background(), RegisterInput{
+		Username: "_bad_",
 		Email:    "invalid",
 		Password: "short",
 		TimeZone: "Mars/Olympus",
@@ -117,7 +125,7 @@ func TestRegisterValidatesInput(t *testing.T) {
 	if !errors.As(err, &validationErr) {
 		t.Fatalf("Register() error = %v, want ValidationError", err)
 	}
-	for _, field := range []string{"email", "password", "timeZone"} {
+	for _, field := range []string{"username", "email", "password", "timeZone"} {
 		if len(validationErr.Fields[field]) == 0 {
 			t.Errorf("missing validation error for %s", field)
 		}
@@ -138,12 +146,35 @@ func TestRegistrationPasswordLengthBoundaries(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			validationErr := validateRegistration("user@example.com", test.password, "Europe/Moscow")
+			validationErr := validateRegistration("planly.user", "user@example.com", test.password, "Europe/Moscow")
 			hasPasswordError := validationErr != nil && len(validationErr.Fields["password"]) != 0
 			if hasPasswordError != test.wantError {
 				t.Errorf("password validation error = %v, want error %v", hasPasswordError, test.wantError)
 			}
 		})
+	}
+}
+
+func TestRegistrationUsernameValidation(t *testing.T) {
+	tests := []struct {
+		username  string
+		wantError bool
+	}{
+		{username: "ab", wantError: true},
+		{username: "abc"},
+		{username: strings.Repeat("a", 32)},
+		{username: strings.Repeat("a", 33), wantError: true},
+		{username: ".planly", wantError: true},
+		{username: "planly_", wantError: true},
+		{username: "планли", wantError: true},
+	}
+
+	for _, test := range tests {
+		validationErr := validateRegistration(test.username, "user@example.com", "password", "Europe/Moscow")
+		hasUsernameError := validationErr != nil && len(validationErr.Fields["username"]) != 0
+		if hasUsernameError != test.wantError {
+			t.Errorf("username %q validation error = %v, want %v", test.username, hasUsernameError, test.wantError)
+		}
 	}
 }
 
@@ -155,10 +186,10 @@ func TestLoginAndLogout(t *testing.T) {
 		t.Fatalf("Hash() error = %v", err)
 	}
 	repository := service.repository.(*fakeRepository)
-	repository.user = User{ID: "user-id", Email: "user@example.com", PasswordHash: passwordHash}
+	repository.user = User{ID: "user-id", Username: "sergey", Email: "user@example.com", PasswordHash: passwordHash}
 
 	result, err := service.Login(context.Background(), LoginInput{
-		Email:    "USER@example.com",
+		Username: "  SERGEY ",
 		Password: "correct horse battery staple",
 	})
 	if err != nil {
@@ -166,6 +197,9 @@ func TestLoginAndLogout(t *testing.T) {
 	}
 	if repository.session.UserID != "user-id" {
 		t.Errorf("session UserID = %q, want user-id", repository.session.UserID)
+	}
+	if repository.foundUsername != "sergey" {
+		t.Errorf("lookup username = %q, want normalized username", repository.foundUsername)
 	}
 
 	if err := service.Logout(context.Background(), result.SessionToken, result.CSRFToken); err != nil {
@@ -181,14 +215,14 @@ func TestLoginDoesNotDistinguishMissingUserAndWrongPassword(t *testing.T) {
 	repository := &fakeRepository{findUserErr: ErrNotFound}
 	service := newTestService(t, repository, now)
 
-	_, err := service.Login(context.Background(), LoginInput{Email: "missing@example.com", Password: "some password value"})
+	_, err := service.Login(context.Background(), LoginInput{Username: "missing", Password: "some password value"})
 	if !errors.Is(err, ErrInvalidCredentials) {
 		t.Fatalf("missing user error = %v, want ErrInvalidCredentials", err)
 	}
 
 	repository.findUserErr = nil
 	repository.user = User{PasswordHash: service.dummyHash}
-	_, err = service.Login(context.Background(), LoginInput{Email: "user@example.com", Password: "wrong password value"})
+	_, err = service.Login(context.Background(), LoginInput{Username: "sergey", Password: "wrong password value"})
 	if !errors.Is(err, ErrInvalidCredentials) {
 		t.Fatalf("wrong password error = %v, want ErrInvalidCredentials", err)
 	}

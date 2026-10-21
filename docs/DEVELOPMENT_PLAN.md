@@ -4,10 +4,10 @@
 
 ## Текущий статус
 
-- Стадия: Frontend routing foundation принят пользователем.
-- Завершённые инкременты: MVP-контракт; Go HTTP-сервер с `GET /health`; PostgreSQL 18.6, миграция `users` и `GET /ready`; Auth foundation; session authentication и `GET /api/v1/me`; изменение часовой зоны через `PATCH /api/v1/me`; Task storage foundation; Task creation API; Task retrieval API; Task list API; Task update API; Task completion API; Task delete API; Frontend foundation; Frontend login/logout; Frontend registration; Frontend automatic time zone; Frontend task creation UI; Frontend task list foundation; Frontend calendar dashboard and task rescheduling; Password policy 8–128; Frontend task completion UI; Frontend task delete UI; Frontend task content editing UI; Containerized API foundation; Frontend container and local reverse proxy foundation; Container stack smoke-test foundation; Brand assets foundation; Frontend routing foundation.
-- Текущий инкремент: не выбран; предложен Username authentication.
-- Следующее действие: согласовать добавление уникального логина в User, регистрацию по login/email/password и вход по login/password; Calendar URL state отложен.
+- Стадия: Username authentication принят пользователем.
+- Завершённые инкременты: MVP-контракт; Go HTTP-сервер с `GET /health`; PostgreSQL 18.6, миграция `users` и `GET /ready`; Auth foundation; session authentication и `GET /api/v1/me`; изменение часовой зоны через `PATCH /api/v1/me`; Task storage foundation; Task creation API; Task retrieval API; Task list API; Task update API; Task completion API; Task delete API; Frontend foundation; Frontend login/logout; Frontend registration; Frontend automatic time zone; Frontend task creation UI; Frontend task list foundation; Frontend calendar dashboard and task rescheduling; Password policy 8–128; Frontend task completion UI; Frontend task delete UI; Frontend task content editing UI; Containerized API foundation; Frontend container and local reverse proxy foundation; Container stack smoke-test foundation; Brand assets foundation; Frontend routing foundation; Username authentication.
+- Текущий инкремент: не выбран; предложен Calendar URL state.
+- Следующее действие: согласовать сохранение выбранной даты и вида календаря в query-параметрах `/app`.
 
 ## Предварительная последовательность
 
@@ -48,7 +48,7 @@
 - Основной экран — календарь (месяц, неделя, день).
 - На текущем этапе реализуется только сущность `Task`; отдельная сущность `Event` не входит в согласованный объём.
 - Диагностические endpoints: `GET /health` проверяет, что процесс API работает; `GET /ready` проверяет готовность приложения, включая доступность PostgreSQL.
-- Пользователь входит по email и паролю; пароль хешируется Argon2id, а браузер использует серверную защищённую cookie-сессию сроком 30 дней.
+- Пользователь регистрируется с уникальными username и email, входит по username и паролю; пароль хешируется Argon2id, а браузер использует серверную защищённую cookie-сессию сроком 30 дней.
 - Задача обязательно имеет либо точный момент `scheduled_at`, либо дату на весь день `scheduled_date`; задачи без даты и время окончания отложены.
 - Часовая зона пользователя хранится как имя IANA; точные моменты передаются в RFC 3339 и хранятся как `timestamptz`.
 - При регистрации web-клиент незаметно получает IANA-зону через browser `Intl`, а будущие Android/iOS-клиенты — через системный API устройства; общий fallback — `Europe/Moscow`. Автоматической синхронизации зоны при каждом запуске и пользовательской настройки в текущем frontend нет.
@@ -442,3 +442,23 @@
 **Проверка и критерии готовности:** component-тесты покрывают отсутствие раннего redirect, guards, auth-переходы и logout; frontend lint/test/build должны пройти. Compose smoke-тест запрашивает `/login`, `/register` и `/app` напрямую и подтверждает возврат Vite-приложения через Nginx. Требуется ручная браузерная проверка URL, refresh и кнопок «Назад/Вперёд».
 
 **Статус:** принят пользователем после ручной проверки переходов, refresh, login/logout и browser history.
+
+### Username authentication
+
+**Цель и границы:** добавить отдельный уникальный логин пользователя: регистрация принимает username, email и пароль, а вход — только username и пароль. Сессии, Origin/CSRF, task API и Calendar URL state не меняются.
+
+**Архитектурные решения:** username нормализуется в нижний регистр и содержит 3–32 ASCII-символа: буквы, цифры, `.`, `_`, `-`, при этом начинается и заканчивается буквой или цифрой. PostgreSQL гарантирует формат, нормализацию и уникальность; миграция безопасно назначает технические `legacy_*` значения существующим строкам. Repository ищет учётные данные только по username, а неизвестный username и неверный пароль возвращают одинаковый `invalid_credentials`. Email остаётся уникальным контактом для будущего подтверждения и восстановления. Публичный User содержит username и email.
+
+**Проверка и критерии готовности:** unit-тесты покрывают нормализацию и границы username, одинаковую ошибку входа и HTTP-контракты; integration-тест проверяет сохранение, поиск, оба конфликта и атомарный откат. Frontend-тесты проверяют payload регистрации/входа, ошибки полей и конфликты. Требуются полные Go/frontend-проверки, применение миграции, Compose smoke и ручная браузерная проверка регистрации, восстановления сессии, logout и входа по username.
+
+**Статус:** принят пользователем после ручной проверки регистрации, выхода, повторного входа по username и восстановления сессии.
+
+### Calendar URL state
+
+**Цель и границы:** сохранять выбранную календарную дату и вид `month` / `week` / `day` в query-параметрах `/app`, чтобы refresh, browser history и копирование URL восстанавливали тот же контекст. Backend API, загрузка задач и данные пользователя не меняются.
+
+**Архитектурные решения:** URL становится источником сохраняемого навигационного состояния, например `/app?view=month&date=2026-10-21`. При отсутствии параметров используются текущая дата и существующий адаптивный default: month на desktop, day на mobile; некорректные значения безопасно заменяются defaults через `replace`, не создавая лишнюю запись history. Действия пользователя обновляют query через React Router, а восстановление URL управляет FullCalendar без циклических обновлений. Параметры не содержат `userId`, time zone или другие приватные данные.
+
+**Проверка и критерии готовности:** component/unit-тесты покрывают defaults, валидные и некорректные параметры, переключение вида и даты, refresh, Back/Forward и отсутствие повторной загрузки при эквивалентном URL. В браузере прямой URL должен открыть нужную дату и вид на desktop и mobile.
+
+**Статус:** предложен; реализация не начата.

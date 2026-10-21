@@ -8,27 +8,27 @@ interface LoginFormProps {
 }
 
 interface FieldErrors {
-  email?: string
+  username?: string
   password?: string
 }
 
 export function LoginForm({ onLogin }: LoginFormProps) {
-  const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [formError, setFormError] = useState<string | null>(null)
   const [fieldToFocus, setFieldToFocus] = useState<keyof FieldErrors | null>(null)
-  const emailInput = useRef<HTMLInputElement>(null)
+  const usernameInput = useRef<HTMLInputElement>(null)
   const passwordInput = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (isSubmitting) {
       return
     }
-    if (fieldToFocus === 'email') {
-      emailInput.current?.focus()
+    if (fieldToFocus === 'username') {
+      usernameInput.current?.focus()
     } else if (fieldToFocus === 'password') {
       passwordInput.current?.focus()
     }
@@ -46,22 +46,22 @@ export function LoginForm({ onLogin }: LoginFormProps) {
     setFieldToFocus(null)
 
     try {
-      await onLogin({ email, password })
+      await onLogin({ username, password })
     } catch (error: unknown) {
       if (error instanceof ApiError && error.problem?.code === 'invalid_credentials') {
-        setFormError('Неверный email или пароль. Проверьте данные и попробуйте снова.')
+        setFormError('Неверный логин или пароль. Проверьте данные и попробуйте снова.')
       } else if (
         error instanceof ApiError &&
         error.problem?.code === 'validation_failed'
       ) {
         const errors = error.problem.errors ?? {}
         const nextErrors = {
-          email: errors.email?.[0],
+          username: errors.username?.[0],
           password: errors.password?.[0],
         }
         setFieldErrors(nextErrors)
-        if (nextErrors.email) {
-          setFieldToFocus('email')
+        if (nextErrors.username) {
+          setFieldToFocus('username')
         } else if (nextErrors.password) {
           setFieldToFocus('password')
         }
@@ -76,27 +76,26 @@ export function LoginForm({ onLogin }: LoginFormProps) {
   return (
     <form className="mt-6 space-y-5" noValidate onSubmit={handleSubmit} aria-busy={isSubmitting}>
       <div>
-        <label className="block text-sm font-medium text-slate-800" htmlFor="email">
-          Email
+        <label className="block text-sm font-medium text-slate-800" htmlFor="username">
+          Логин
         </label>
         <input
-          ref={emailInput}
+          ref={usernameInput}
           className="planly-input mt-2"
-          id="email"
-          name="email"
-          type="email"
-          autoComplete="email"
-          inputMode="email"
+          id="username"
+          name="username"
+          type="text"
+          autoComplete="username"
           required
           disabled={isSubmitting}
-          value={email}
-          aria-invalid={Boolean(fieldErrors.email)}
-          aria-describedby={fieldErrors.email ? 'email-error' : undefined}
-          onChange={(event) => setEmail(event.target.value)}
+          value={username}
+          aria-invalid={Boolean(fieldErrors.username)}
+          aria-describedby={fieldErrors.username ? 'username-error' : undefined}
+          onChange={(event) => setUsername(event.target.value)}
         />
-        {fieldErrors.email && (
-          <p className="mt-2 text-sm text-red-700" id="email-error" role="alert">
-            {fieldErrors.email}
+        {fieldErrors.username && (
+          <p className="mt-2 text-sm text-red-700" id="username-error" role="alert">
+            {fieldErrors.username}
           </p>
         )}
       </div>

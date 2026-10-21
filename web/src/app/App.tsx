@@ -168,7 +168,7 @@ function CalendarScreen() {
           </nav>
           <div className="mt-auto rounded-3xl border border-[var(--color-border)] bg-white/70 p-4">
             <p className="text-xs font-medium uppercase tracking-[0.12em] text-[var(--color-muted)]">Аккаунт</p>
-            <p className="mt-2 truncate text-sm font-semibold" title={state.user.email}>{state.user.email}</p>
+            <p className="mt-2 truncate text-sm font-semibold" title={state.user.username}>{state.user.username}</p>
             <button className="mt-3 flex min-h-11 w-full cursor-pointer items-center gap-2 rounded-xl px-2 text-sm font-semibold text-[var(--color-muted)] transition-colors hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-ink)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)] disabled:cursor-not-allowed disabled:opacity-60" type="button" disabled={isLoggingOut} onClick={handleLogout}>
               <LogOutIcon className="size-4" />{isLoggingOut ? 'Выходим…' : 'Выйти'}
             </button>

@@ -90,7 +90,7 @@ curl -i http://localhost:8080/ready
 curl -i -c /tmp/planly-cookie.txt \
   -H 'Origin: http://localhost:5173' \
   -H 'Content-Type: application/json' \
-  -d '{"email":"user@example.com","password":"correct horse battery staple","timeZone":"Europe/Moscow"}' \
+  -d '{"username":"sergey","email":"user@example.com","password":"correct horse battery staple","timeZone":"Europe/Moscow"}' \
   http://localhost:8080/api/v1/auth/register
 ```
 
