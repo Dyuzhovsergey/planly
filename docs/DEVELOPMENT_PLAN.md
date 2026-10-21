@@ -4,10 +4,10 @@
 
 ## Текущий статус
 
-- Стадия: Frontend container and local reverse proxy foundation принят пользователем.
-- Завершённые инкременты: MVP-контракт; Go HTTP-сервер с `GET /health`; PostgreSQL 18.6, миграция `users` и `GET /ready`; Auth foundation; session authentication и `GET /api/v1/me`; изменение часовой зоны через `PATCH /api/v1/me`; Task storage foundation; Task creation API; Task retrieval API; Task list API; Task update API; Task completion API; Task delete API; Frontend foundation; Frontend login/logout; Frontend registration; Frontend automatic time zone; Frontend task creation UI; Frontend task list foundation; Frontend calendar dashboard and task rescheduling; Password policy 8–128; Frontend task completion UI; Frontend task delete UI; Frontend task content editing UI; Containerized API foundation; Frontend container and local reverse proxy foundation.
-- Текущий инкремент: отсутствует; следующим предлагается Container stack smoke-test foundation.
-- Следующее действие: согласовать небольшой воспроизводимый smoke-test всего Compose-стека без CI/CD и production deployment.
+- Стадия: Container stack smoke-test foundation принят пользователем.
+- Завершённые инкременты: MVP-контракт; Go HTTP-сервер с `GET /health`; PostgreSQL 18.6, миграция `users` и `GET /ready`; Auth foundation; session authentication и `GET /api/v1/me`; изменение часовой зоны через `PATCH /api/v1/me`; Task storage foundation; Task creation API; Task retrieval API; Task list API; Task update API; Task completion API; Task delete API; Frontend foundation; Frontend login/logout; Frontend registration; Frontend automatic time zone; Frontend task creation UI; Frontend task list foundation; Frontend calendar dashboard and task rescheduling; Password policy 8–128; Frontend task completion UI; Frontend task delete UI; Frontend task content editing UI; Containerized API foundation; Frontend container and local reverse proxy foundation; Container stack smoke-test foundation.
+- Текущий инкремент: Brand assets foundation.
+- Следующее действие: подготовить компактный логотип и favicon на основе согласованной монограммы из `image.svg`.
 
 ## Предварительная последовательность
 
@@ -412,3 +412,13 @@
 **Проверка и критерии готовности:** frontend lint/test/build, стандартные Go-проверки, Compose validation и сборка образов должны пройти. Smoke-тест подтверждает healthy web, `200` для `/`, `401` JSON для анонимного `/api/v1/me` через proxy, прямой `/health`, непривилегированный read-only runtime и передачу session-cookie/Origin. Инкремент считается принятым после браузерной проверки регистрации, входа, восстановления сессии и операций с задачами через `http://localhost:5173`.
 
 **Статус:** принят пользователем после ручной проверки запуска через Docker Compose, регистрации, входа, восстановления сессии и полного набора операций с задачами через единый origin `http://localhost:5173`.
+
+### Container stack smoke-test foundation
+
+**Цель и границы:** заменить повторяемый набор ручных Docker- и HTTP-проверок одной воспроизводимой командой без добавления CI/CD, браузерных E2E-тестов и новых зависимостей.
+
+**Архитектурные решения:** POSIX shell-скрипт валидирует Compose-конфигурацию, собирает и запускает существующий стек, ожидает healthy-состояний и проверяет frontend, прямые API health/readiness, путь `/api` через Nginx, сохранение разрешённого Origin, успешные миграции, непривилегированных пользователей и read-only root filesystem. Порты определяются из Compose, пустой registration payload не создаёт пользователя, а контейнеры и постоянный PostgreSQL volume после проверки остаются на месте.
+
+**Проверка и критерии готовности:** `sh -n scripts/smoke-compose.sh`, `git diff --check`, `docker compose config --quiet` и реальный запуск скрипта должны завершаться успешно. Ошибка любого обязательного сервиса или HTTP-контракта должна давать ненулевой exit code и короткое диагностическое сообщение.
+
+**Статус:** принят пользователем после успешного ручного запуска и сообщения `all container stack smoke checks passed`.
