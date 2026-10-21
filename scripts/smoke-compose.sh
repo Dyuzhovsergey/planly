@@ -123,6 +123,12 @@ expect_status 200 "$temporary_directory/frontend" "$web_url/"
 grep -qi '<div id="root"></div>' "$temporary_directory/frontend" || fail "frontend response is not the Vite application"
 log "frontend returned the production application"
 
+for route in /login /register /app; do
+    expect_status 200 "$temporary_directory/frontend-route" "$web_url$route"
+    grep -qi '<div id="root"></div>' "$temporary_directory/frontend-route" || fail "frontend route $route did not use the SPA fallback"
+done
+log "Nginx served the application for direct frontend routes"
+
 expect_status 200 "$temporary_directory/health" "$api_url/health"
 expect_status 200 "$temporary_directory/ready" "$api_url/ready"
 log "API health and readiness checks passed"

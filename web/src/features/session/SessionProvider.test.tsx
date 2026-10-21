@@ -1,4 +1,5 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter, useLocation } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { App } from '../../app/App'
@@ -37,12 +38,26 @@ const authEnvelope = {
   csrfToken: 'csrf-token-kept-in-memory',
 }
 
-function renderApplication() {
+function LocationProbe() {
+  const location = useLocation()
+  return <div data-testid="current-location" hidden>{location.pathname}</div>
+}
+
+function renderApplication(initialPath = '/login') {
   render(
-    <SessionProvider>
-      <App />
-    </SessionProvider>,
+    <MemoryRouter initialEntries={[initialPath]}>
+      <SessionProvider>
+        <App />
+        <LocationProbe />
+      </SessionProvider>
+    </MemoryRouter>,
   )
+}
+
+async function expectLocation(pathname: string) {
+  await waitFor(() => {
+    expect(screen.getByTestId('current-location')).toHaveTextContent(pathname)
+  })
 }
 
 function jsonResponse(body: unknown, status = 200) {
@@ -71,7 +86,7 @@ async function fillAndSubmitLogin(email = 'user@example.com', password = 'passwo
 }
 
 async function openRegistrationForm() {
-  fireEvent.click(await screen.findByRole('button', { name: 'Создать аккаунт' }))
+  fireEvent.click(await screen.findByRole('link', { name: 'Создать аккаунт' }))
   return screen.findByRole('heading', { name: 'Создайте аккаунт' })
 }
 
@@ -94,9 +109,10 @@ describe('session restoration', () => {
   it('shows a loading state while the request is pending', () => {
     vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(() => undefined)))
 
-    renderApplication()
+    renderApplication('/app')
 
     expect(screen.getByRole('status')).toHaveTextContent('Восстанавливаем сессию')
+    expect(screen.getByTestId('current-location')).toHaveTextContent('/app')
   })
 
   it('shows the authenticated user and sends the session cookie', async () => {
@@ -108,6 +124,7 @@ describe('session restoration', () => {
     renderApplication()
 
     expect(await screen.findByText('user@example.com')).toBeInTheDocument()
+    await expectLocation('/app')
     expect(screen.queryByText(/Часовая зона/)).not.toBeInTheDocument()
     expect(screen.queryByText(authEnvelope.csrfToken)).not.toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledWith(
@@ -119,9 +136,10 @@ describe('session restoration', () => {
   it('treats an unauthorized response as an anonymous session', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(authenticationRequiredResponse()))
 
-    renderApplication()
+    renderApplication('/app')
 
     expect(await screen.findByRole('button', { name: 'Войти' })).toBeInTheDocument()
+    await expectLocation('/login')
   })
 
   it('shows an error and restores the user after retry', async () => {
@@ -153,6 +171,7 @@ describe('session restoration', () => {
     await fillAndSubmitLogin()
 
     expect(await screen.findByText('user@example.com')).toBeInTheDocument()
+    await expectLocation('/app')
     expect(fetchMock).toHaveBeenCalledTimes(2)
     const [path, init] = fetchMock.mock.calls[1]
     expect(path).toBe('/api/v1/auth/login')
@@ -257,18 +276,20 @@ describe('session restoration', () => {
     expect(password).toHaveAttribute('type', 'password')
   })
 
-  it('switches between login and registration without routing', async () => {
+  it('navigates between login and registration routes', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(authenticationRequiredResponse()))
 
     renderApplication()
     await openRegistrationForm()
+    await expectLocation('/register')
 
     expect(screen.getByText('От 8 до 128 символов.')).toBeInTheDocument()
     expect(screen.queryByLabelText('Часовая зона')).not.toBeInTheDocument()
     expect(screen.queryByText(/Часовая зона/)).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Войти' }))
+    fireEvent.click(screen.getByRole('link', { name: 'Войти' }))
 
     expect(await screen.findByRole('heading', { name: 'Войдите в Planly' })).toBeInTheDocument()
+    await expectLocation('/login')
     expect(screen.queryByLabelText('Часовая зона')).not.toBeInTheDocument()
   })
 
@@ -285,6 +306,7 @@ describe('session restoration', () => {
     await fillAndSubmitRegistration('new-user@example.com', '12345678')
 
     expect(await screen.findByText('user@example.com')).toBeInTheDocument()
+    await expectLocation('/app')
     expect(fetchMock).toHaveBeenCalledTimes(2)
     const [path, init] = fetchMock.mock.calls[1]
     expect(path).toBe('/api/v1/auth/register')
@@ -412,6 +434,7 @@ describe('session restoration', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Выйти' }))
 
     expect(await screen.findByRole('button', { name: 'Войти' })).toBeInTheDocument()
+    await expectLocation('/login')
     const [path, init] = fetchMock.mock.calls[1]
     expect(path).toBe('/api/v1/auth/logout')
     expect(init).toEqual(expect.objectContaining({ method: 'POST', credentials: 'include' }))
@@ -456,6 +479,7 @@ describe('session restoration', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Создать задачу' }))
 
     expect(await screen.findByRole('button', { name: 'Войти' })).toBeInTheDocument()
+    await expectLocation('/login')
     expect(fetchMock).toHaveBeenCalledTimes(3)
     expect(fetchMock.mock.calls[2][0]).toBe('/api/v1/me')
   })
@@ -471,5 +495,6 @@ describe('session restoration', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Выйти' }))
 
     expect(await screen.findByRole('button', { name: 'Войти' })).toBeInTheDocument()
+    await expectLocation('/login')
   })
 })

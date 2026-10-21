@@ -4,10 +4,10 @@
 
 ## Текущий статус
 
-- Стадия: Brand assets foundation принят пользователем.
-- Завершённые инкременты: MVP-контракт; Go HTTP-сервер с `GET /health`; PostgreSQL 18.6, миграция `users` и `GET /ready`; Auth foundation; session authentication и `GET /api/v1/me`; изменение часовой зоны через `PATCH /api/v1/me`; Task storage foundation; Task creation API; Task retrieval API; Task list API; Task update API; Task completion API; Task delete API; Frontend foundation; Frontend login/logout; Frontend registration; Frontend automatic time zone; Frontend task creation UI; Frontend task list foundation; Frontend calendar dashboard and task rescheduling; Password policy 8–128; Frontend task completion UI; Frontend task delete UI; Frontend task content editing UI; Containerized API foundation; Frontend container and local reverse proxy foundation; Container stack smoke-test foundation; Brand assets foundation.
-- Текущий инкремент: не выбран; предложен Frontend routing foundation.
-- Следующее действие: согласовать маршруты `/login`, `/register` и `/app` с защитой authenticated-экрана.
+- Стадия: Frontend routing foundation принят пользователем.
+- Завершённые инкременты: MVP-контракт; Go HTTP-сервер с `GET /health`; PostgreSQL 18.6, миграция `users` и `GET /ready`; Auth foundation; session authentication и `GET /api/v1/me`; изменение часовой зоны через `PATCH /api/v1/me`; Task storage foundation; Task creation API; Task retrieval API; Task list API; Task update API; Task completion API; Task delete API; Frontend foundation; Frontend login/logout; Frontend registration; Frontend automatic time zone; Frontend task creation UI; Frontend task list foundation; Frontend calendar dashboard and task rescheduling; Password policy 8–128; Frontend task completion UI; Frontend task delete UI; Frontend task content editing UI; Containerized API foundation; Frontend container and local reverse proxy foundation; Container stack smoke-test foundation; Brand assets foundation; Frontend routing foundation.
+- Текущий инкремент: не выбран; предложен Username authentication.
+- Следующее действие: согласовать добавление уникального логина в User, регистрацию по login/email/password и вход по login/password; Calendar URL state отложен.
 
 ## Предварительная последовательность
 
@@ -432,3 +432,13 @@
 **Проверка и критерии готовности:** компонентный тест проверяет название, tagline и декоративное изображение; frontend lint/test/build и Docker-сборка должны включать SVG из `public`. В браузере логотип должен оставаться читаемым в auth/sidebar/mobile вариантах, масштабироваться без потери качества, а favicon — отображаться во вкладке без обрезания.
 
 **Статус:** принят пользователем после ручной проверки логотипа в auth-интерфейсе, боковой панели, мобильной шапке и favicon во вкладке браузера.
+
+### Frontend routing foundation
+
+**Цель и границы:** заменить локальное переключение auth-экранов постоянными URL `/login`, `/register` и защищённым `/app`, не добавляя новые продуктовые страницы и не меняя backend API, БД или production deployment.
+
+**Архитектурные решения:** `BrowserRouter` оборачивает существующий `SessionProvider`, а route guards принимают решение только по его состоянию. В `loading` и `error` redirect не выполняется; после восстановления anonymous направляется на `/login`, authenticated — на `/app`. Login/registration переходят в `/app`, logout — в `/login` без перезагрузки. React Router отвечает за URL и browser history; существующий SPA fallback Vite/Nginx поддерживает прямое открытие и refresh. Неизвестный путь использует то же session-зависимое направление после восстановления сессии.
+
+**Проверка и критерии готовности:** component-тесты покрывают отсутствие раннего redirect, guards, auth-переходы и logout; frontend lint/test/build должны пройти. Compose smoke-тест запрашивает `/login`, `/register` и `/app` напрямую и подтверждает возврат Vite-приложения через Nginx. Требуется ручная браузерная проверка URL, refresh и кнопок «Назад/Вперёд».
+
+**Статус:** принят пользователем после ручной проверки переходов, refresh, login/logout и browser history.
