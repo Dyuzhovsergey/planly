@@ -4,10 +4,10 @@
 
 ## Текущий статус
 
-- Стадия: Frontend task creation entrypoints реализован и прошёл автоматические проверки; требуется браузерная приёмка.
-- Завершённые инкременты: MVP-контракт; Go HTTP-сервер с `GET /health`; PostgreSQL 18.6, миграция `users` и `GET /ready`; Auth foundation; session authentication и `GET /api/v1/me`; изменение часовой зоны через `PATCH /api/v1/me`; Task storage foundation; Task creation API; Task retrieval API; Task list API; Task update API; Task completion API; Task delete API; Frontend foundation; Frontend login/logout; Frontend registration; Frontend automatic time zone; Frontend task creation UI; Frontend task list foundation; Frontend calendar dashboard and task rescheduling; Password policy 8–128; Frontend task completion UI; Frontend task delete UI; Frontend task content editing UI; Containerized API foundation; Frontend container and local reverse proxy foundation; Container stack smoke-test foundation; Brand assets foundation; Frontend routing foundation; Username authentication; Calendar URL state; Frontend task list section.
-- Текущий инкремент: Frontend task creation entrypoints — скрытая по умолчанию форма открывается кнопкой `+` в календаре и `/tasks`.
-- Следующее действие: вручную проверить открытие, отмену, создание timed/all-day задач и адаптивность на 375/1440 px; после подтверждения отметить инкремент принятым.
+- Стадия: Frontend task creation entrypoints принят пользователем; планируется отдельный Frontend task week view.
+- Завершённые инкременты: MVP-контракт; Go HTTP-сервер с `GET /health`; PostgreSQL 18.6, миграция `users` и `GET /ready`; Auth foundation; session authentication и `GET /api/v1/me`; изменение часовой зоны через `PATCH /api/v1/me`; Task storage foundation; Task creation API; Task retrieval API; Task list API; Task update API; Task completion API; Task delete API; Frontend foundation; Frontend login/logout; Frontend registration; Frontend automatic time zone; Frontend task creation UI; Frontend task list foundation; Frontend calendar dashboard and task rescheduling; Password policy 8–128; Frontend task completion UI; Frontend task delete UI; Frontend task content editing UI; Containerized API foundation; Frontend container and local reverse proxy foundation; Container stack smoke-test foundation; Brand assets foundation; Frontend routing foundation; Username authentication; Calendar URL state; Frontend task list section; Frontend task creation entrypoints.
+- Текущий инкремент: отсутствует.
+- Следующее действие: согласовать Frontend task week view с URL-состоянием периода «Неделя / Год»; реализацию пока не начинать.
 
 ## Предварительная последовательность
 
@@ -485,4 +485,4 @@
 
 **Проверка:** component-тесты покрывают скрытое начальное состояние, modal semantics, блокировку прокрутки, focus trap/restore, `Escape`, backdrop, запрет закрытия во время отправки, создание из календаря и доски, обновление данных, payload без `userId`, другой год и скрывающий фильтр. Прошли frontend lint, 117 тестов, production build и `docker compose config --quiet`; требуется ручная проверка на desktop/mobile.
 
-**Статус:** реализован; ожидает браузерной приёмки пользователем.
+**Статус:** принят пользователем после ручной проверки создания задач на `/app` и `/tasks`, адаптивности, `Escape`, отмены и закрытия по backdrop.
