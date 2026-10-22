@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { MemoryRouter, useLocation } from 'react-router'
+import { MemoryRouter, useLocation, useNavigate } from 'react-router'
+import { Temporal } from 'temporal-polyfill'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { TaskListPage } from './TaskListPage'
@@ -41,7 +42,14 @@ function jsonResponse(body: unknown, status = 200) {
 
 function LocationProbe() {
   const location = useLocation()
-  return <output data-testid="task-list-location">{location.pathname}{location.search}</output>
+  const navigate = useNavigate()
+  return (
+    <>
+      <output data-testid="task-list-location">{location.pathname}{location.search}</output>
+      <button type="button" onClick={() => navigate(-1)}>Назад в тесте</button>
+      <button type="button" onClick={() => navigate(1)}>Вперёд в тесте</button>
+    </>
+  )
 }
 
 function dragDataTransfer() {
@@ -55,11 +63,12 @@ function dragDataTransfer() {
 }
 
 function renderTaskList(
-  initialPath = '/tasks?year=2026&status=all',
+  initialPath: string | string[] = '/tasks?month=2026-10&status=all',
   onAuthenticationRequired = vi.fn(),
 ) {
+  const initialEntries = Array.isArray(initialPath) ? initialPath : [initialPath]
   render(
-    <MemoryRouter initialEntries={[initialPath]}>
+    <MemoryRouter initialEntries={initialEntries} initialIndex={initialEntries.length - 1}>
       <TaskListPage
         timeZone="Europe/Moscow"
         csrfToken="csrf-in-memory"
@@ -112,28 +121,28 @@ describe('TaskListPage', () => {
     expect(init.body).not.toContain('userId')
   })
 
-  it('explains when a created task is outside the selected year', async () => {
-    const nextYearTask = {
+  it('explains when a created task is outside the selected month', async () => {
+    const nextMonthTask = {
       ...createdTask,
       id: '1bd7dd5e-65c4-4512-ad07-242bb3b14e27',
-      schedule: { type: 'allDay' as const, date: '2027-01-02' },
+      schedule: { type: 'allDay' as const, date: '2026-11-02' },
     }
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(jsonResponse({ items: [] }))
-      .mockResolvedValueOnce(jsonResponse(nextYearTask, 201))
+      .mockResolvedValueOnce(jsonResponse(nextMonthTask, 201))
       .mockResolvedValueOnce(jsonResponse({ items: [] }))
     vi.stubGlobal('fetch', fetchMock)
 
     renderTaskList()
-    await screen.findByText(/За 2026 год задач пока нет/)
+    await screen.findByText(/В выбранном месяце задач пока нет/)
     fireEvent.click(screen.getByRole('button', { name: 'Добавить задачу' }))
-    fireEvent.change(screen.getByLabelText('Название'), { target: { value: nextYearTask.title } })
+    fireEvent.change(screen.getByLabelText('Название'), { target: { value: nextMonthTask.title } })
     fireEvent.click(screen.getByLabelText('Весь день'))
-    fireEvent.change(screen.getByLabelText('Дата'), { target: { value: '2027-01-02' } })
+    fireEvent.change(screen.getByLabelText('Дата'), { target: { value: '2026-11-02' } })
     fireEvent.click(screen.getByRole('button', { name: 'Создать задачу' }))
 
-    expect(await screen.findByText(/не входит в текущий период/)).toBeInTheDocument()
-    expect(screen.getByTestId('task-list-location')).toHaveTextContent('year=2026')
+    expect(await screen.findByText(/создана вне выбранного месяца/)).toBeInTheDocument()
+    expect(screen.getByTestId('task-list-location')).toHaveTextContent('month=2026-10')
   })
 
   it('explains when a new active task is hidden by the completed filter', async () => {
@@ -143,7 +152,7 @@ describe('TaskListPage', () => {
       .mockResolvedValueOnce(jsonResponse({ items: [completedTask, createdTask] }))
     vi.stubGlobal('fetch', fetchMock)
 
-    renderTaskList('/tasks?year=2026&status=completed')
+    renderTaskList('/tasks?month=2026-10&status=completed')
     await screen.findByText(completedTask.title)
     fireEvent.click(screen.getByRole('button', { name: 'Добавить задачу' }))
     fireEvent.change(screen.getByLabelText('Название'), { target: { value: createdTask.title } })
@@ -156,15 +165,18 @@ describe('TaskListPage', () => {
     expect(screen.getByTestId('task-list-location')).toHaveTextContent('status=completed')
   })
 
-  it('loads the selected year, shows its period and filters without another request', async () => {
+  it('loads the selected month, separates its year and filters without another request', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ items: [activeTask, completedTask] }))
     vi.stubGlobal('fetch', fetchMock)
 
     renderTaskList()
 
     expect(await screen.findByText('Позвонить врачу')).toBeInTheDocument()
-    expect(screen.getByText('1 января — 31 декабря 2026')).toBeInTheDocument()
-    expect(fetchMock.mock.calls[0][0]).toBe('/api/v1/tasks?from=2026-01-01&to=2027-01-01')
+    expect(screen.getAllByText('Октябрь')).not.toHaveLength(0)
+    expect(screen.getAllByText('2026')).not.toHaveLength(0)
+    expect(screen.queryByText('Годовой обзор')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Период:/)).not.toBeInTheDocument()
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/v1/tasks?from=2026-10-01&to=2026-11-01')
     expect(fetchMock.mock.calls[0][0]).not.toContain('userId')
     expect(fetchMock.mock.calls[0][0]).not.toContain('timeZone')
 
@@ -172,34 +184,101 @@ describe('TaskListPage', () => {
 
     expect(screen.queryByText('Позвонить врачу')).not.toBeInTheDocument()
     expect(screen.getByText('Оплатить интернет')).toBeInTheDocument()
-    expect(screen.getByTestId('task-list-location')).toHaveTextContent('/tasks?year=2026&status=completed')
+    expect(screen.getByTestId('task-list-location')).toHaveTextContent('/tasks?month=2026-10&status=completed')
     expect(fetchMock).toHaveBeenCalledOnce()
   })
 
   it('canonicalizes invalid query parameters', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ items: [] })))
 
-    renderTaskList('/tasks?source=menu&year=wrong&status=late')
+    renderTaskList('/tasks?source=menu&month=wrong&status=late')
 
     await waitFor(() => {
       expect(screen.getByTestId('task-list-location').textContent)
-        .toMatch(/^\/tasks\?source=menu&year=\d{4}&status=all$/)
+        .toMatch(/^\/tasks\?source=menu&month=\d{4}-\d{2}&status=all$/)
     })
   })
 
-  it('loads a new annual range when the selected year changes', async () => {
+  it('canonicalizes a legacy year link to January', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ items: [] }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderTaskList('/tasks?source=bookmark&year=2025&status=all')
+
+    await waitFor(() => {
+      expect(screen.getByTestId('task-list-location'))
+        .toHaveTextContent('/tasks?source=bookmark&status=all&month=2025-01')
+    })
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/v1/tasks?from=2025-01-01&to=2025-02-01')
+  })
+
+  it('loads a new monthly range when the previous month is selected', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(jsonResponse({ items: [] }))
       .mockResolvedValueOnce(jsonResponse({ items: [activeTask] }))
     vi.stubGlobal('fetch', fetchMock)
 
     renderTaskList()
-    await screen.findByText(/За 2026 год задач пока нет/)
-    fireEvent.click(screen.getByRole('button', { name: 'Показать 2025 год' }))
+    await screen.findByText(/В выбранном месяце задач пока нет/)
+    fireEvent.click(screen.getByRole('button', { name: 'Показать предыдущий месяц' }))
 
     expect(await screen.findByText('Позвонить врачу')).toBeInTheDocument()
-    expect(screen.getByText('1 января — 31 декабря 2025')).toBeInTheDocument()
-    expect(fetchMock.mock.calls[1][0]).toBe('/api/v1/tasks?from=2025-01-01&to=2026-01-01')
+    expect(screen.getAllByText('Сентябрь')).not.toHaveLength(0)
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/v1/tasks?from=2026-09-01&to=2026-10-01')
+  })
+
+  it('updates the separate year when moving from December to January', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ items: [] }))
+      .mockResolvedValueOnce(jsonResponse({ items: [] }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderTaskList('/tasks?month=2026-12&status=all')
+    await screen.findByText(/В выбранном месяце задач пока нет/)
+    fireEvent.click(screen.getByRole('button', { name: 'Показать следующий месяц' }))
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    expect(screen.getAllByText('Январь')).not.toHaveLength(0)
+    expect(screen.getAllByText('2027')).not.toHaveLength(0)
+    expect(screen.getByTestId('task-list-location')).toHaveTextContent('month=2027-01')
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/v1/tasks?from=2027-01-01&to=2027-02-01')
+  })
+
+  it('returns to the current month in the user time zone', async () => {
+    vi.spyOn(Temporal.Now, 'instant').mockReturnValue(Temporal.Instant.from('2026-10-22T09:00:00Z'))
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ items: [] }))
+      .mockResolvedValueOnce(jsonResponse({ items: [] }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderTaskList('/tasks?month=2026-09&status=all')
+    await screen.findByText(/В выбранном месяце задач пока нет/)
+    fireEvent.click(screen.getByRole('button', { name: 'Текущий месяц' }))
+
+    await waitFor(() => expect(screen.getByTestId('task-list-location')).toHaveTextContent('month=2026-10'))
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/v1/tasks?from=2026-10-01&to=2026-11-01')
+  })
+
+  it('restores the month from browser history navigation', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ items: [] }))
+      .mockResolvedValueOnce(jsonResponse({ items: [] }))
+      .mockResolvedValueOnce(jsonResponse({ items: [] }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderTaskList([
+      '/tasks?month=2026-09&status=all',
+      '/tasks?month=2026-10&status=all',
+    ])
+    await screen.findByText(/В выбранном месяце задач пока нет/)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Назад в тесте' }))
+    await waitFor(() => expect(screen.getByTestId('task-list-location')).toHaveTextContent('month=2026-09'))
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/v1/tasks?from=2026-09-01&to=2026-10-01')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Вперёд в тесте' }))
+    await waitFor(() => expect(screen.getByTestId('task-list-location')).toHaveTextContent('month=2026-10'))
+    expect(fetchMock.mock.calls[2][0]).toBe('/api/v1/tasks?from=2026-10-01&to=2026-11-01')
   })
 
   it('moves a completed task out of the active filter using the existing PATCH', async () => {
@@ -214,10 +293,10 @@ describe('TaskListPage', () => {
       .mockResolvedValueOnce(jsonResponse(updated))
     vi.stubGlobal('fetch', fetchMock)
 
-    renderTaskList('/tasks?year=2026&status=active')
+    renderTaskList('/tasks?month=2026-10&status=active')
     fireEvent.click(await screen.findByRole('button', { name: 'Завершить задачу Позвонить врачу' }))
 
-    expect(await screen.findByText('В фильтре «Активные» за 2026 год задач нет.')).toBeInTheDocument()
+    expect(await screen.findByText('В фильтре «Активные» в выбранном месяце задач нет.')).toBeInTheDocument()
     expect(JSON.parse(fetchMock.mock.calls[1][1].body as string)).toEqual({ completed: true })
     expect(fetchMock.mock.calls[1][1].body).not.toContain('userId')
   })
@@ -278,7 +357,7 @@ describe('TaskListPage', () => {
     expect(within(completedColumn).queryByText('Позвонить врачу')).not.toBeInTheDocument()
   })
 
-  it('refreshes the annual list after editing a task', async () => {
+  it('refreshes the monthly list after editing a task', async () => {
     const updated = { ...activeTask, title: 'Позвонить терапевту', updatedAt: '2026-10-20T16:00:00Z' }
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(jsonResponse({ items: [activeTask] }))
@@ -320,9 +399,9 @@ describe('TaskListPage', () => {
 
     renderTaskList(undefined, onAuthenticationRequired)
     fireEvent.click(await screen.findByRole('button', { name: 'Повторить' }))
-    expect(await screen.findByText(/За 2026 год задач пока нет/)).toBeInTheDocument()
+    expect(await screen.findByText(/В выбранном месяце задач пока нет/)).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Показать 2025 год' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Показать предыдущий месяц' }))
     await waitFor(() => expect(onAuthenticationRequired).toHaveBeenCalledOnce())
   })
 })

@@ -4,10 +4,11 @@
 
 ## Текущий статус
 
-- Стадия: Frontend task creation entrypoints принят пользователем; планируется отдельный Frontend task week view.
+- Стадия: Frontend task month view принят; эксперименты с палитрами отменены, исходное зелёное оформление восстановлено.
+- Последний принятый функциональный инкремент: Frontend task month view.
 - Завершённые инкременты: MVP-контракт; Go HTTP-сервер с `GET /health`; PostgreSQL 18.6, миграция `users` и `GET /ready`; Auth foundation; session authentication и `GET /api/v1/me`; изменение часовой зоны через `PATCH /api/v1/me`; Task storage foundation; Task creation API; Task retrieval API; Task list API; Task update API; Task completion API; Task delete API; Frontend foundation; Frontend login/logout; Frontend registration; Frontend automatic time zone; Frontend task creation UI; Frontend task list foundation; Frontend calendar dashboard and task rescheduling; Password policy 8–128; Frontend task completion UI; Frontend task delete UI; Frontend task content editing UI; Containerized API foundation; Frontend container and local reverse proxy foundation; Container stack smoke-test foundation; Brand assets foundation; Frontend routing foundation; Username authentication; Calendar URL state; Frontend task list section; Frontend task creation entrypoints.
-- Текущий инкремент: отсутствует.
-- Следующее действие: согласовать Frontend task week view с URL-состоянием периода «Неделя / Год»; реализацию пока не начинать.
+- Текущий инкремент: отсутствует; выполнен откат только визуальных экспериментов.
+- Следующее действие: визуально подтвердить восстановленное оформление и согласовать следующий небольшой функциональный инкремент.
 
 ## Предварительная последовательность
 
@@ -486,3 +487,19 @@
 **Проверка:** component-тесты покрывают скрытое начальное состояние, modal semantics, блокировку прокрутки, focus trap/restore, `Escape`, backdrop, запрет закрытия во время отправки, создание из календаря и доски, обновление данных, payload без `userId`, другой год и скрывающий фильтр. Прошли frontend lint, 117 тестов, production build и `docker compose config --quiet`; требуется ручная проверка на desktop/mobile.
 
 **Статус:** принят пользователем после ручной проверки создания задач на `/app` и `/tasks`, адаптивности, `Escape`, отмены и закрытия по backdrop.
+
+### Frontend task month view
+
+**Цель и границы:** заменить годовой диапазон `/tasks` единым лаконичным месячным обзором без переключателей периода, новых backend endpoints, зависимостей или изменений календаря `/app`.
+
+**Архитектурные решения:** URL хранит `/tasks?month=YYYY-MM&status=all|active|completed`; отсутствующий или неверный месяц заменяется текущим в `User.timeZone`, а старый `year=YYYY` — январём указанного года. Чистые helpers на `Temporal` строят полуинтервал от первого числа месяца до первого числа следующего, переключают месяц через границу года и отдельно формируют видимые название месяца и год. UI показывает год под «Задачи», только название месяца между стрелками и действие «Текущий месяц». Status-фильтры работают локально, а создание и остальные операции доски переиспользуют существующий API и компоненты.
+
+**Проверка:** unit/component-тесты покрывают февраль и високосный год, декабрь/январь, «Текущий месяц» в IANA-зоне пользователя, legacy URL, Back/Forward, сохранение посторонних параметров, диапазоны GET, локальную status-фильтрацию и создание внутри/вне месяца. Прошли frontend lint, 125 тестов, production build и `docker compose config --quiet`; требуется ручная приёмка на desktop/mobile.
+
+**Статус:** принят пользователем после ручной проверки навигации по месяцам, декабря/января, фильтров, операций с задачами и адаптивности.
+
+### Отмена экспериментов с палитрами
+
+По запросу пользователя оформление возвращено к состоянию до Midnight Navy: исходный светлый интерфейс, зелёные акценты и зелёная палитра календаря. Midnight Navy, иерархия с тёмным sidebar и Warm Plum больше не являются текущим направлением. Месячный раздел задач, создание через `+`, центральный dialog и остальные функции сохранены.
+
+**Проверки:** успешно выполнены `npm run lint`, `npm test` (125 тестов), `npm run build` и `git diff --check`. Исходные стили, app shell и календарь совпадают с версиями до экспериментов; визуальное подтверждение в браузере ожидается от пользователя.

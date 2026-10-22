@@ -44,7 +44,7 @@ const columns: BoardColumn[] = [
   {
     status: 'completed',
     label: 'Завершённые',
-    description: 'Выполненные задачи за выбранный год',
+    description: 'Выполненные задачи за выбранный месяц',
     completed: true,
   },
 ]

@@ -1,42 +1,78 @@
-import { describe, expect, it } from 'vitest'
+import { Temporal } from 'temporal-polyfill'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  currentTaskMonth,
   hasCanonicalTaskListSearch,
   parseTaskListURLState,
+  shiftTaskMonth,
   taskListSearchParams,
-  taskYearForInstant,
-  taskYearRange,
+  taskMonthForInstant,
+  taskMonthLabel,
+  taskMonthRange,
+  taskMonthYear,
 } from './task-list-url-state'
 
+afterEach(() => {
+  vi.restoreAllMocks()
+})
+
 describe('task list URL state', () => {
-  it('parses a canonical selected year and status', () => {
-    expect(parseTaskListURLState(new URLSearchParams('year=2026&status=completed'), 2025))
-      .toEqual({ year: 2026, status: 'completed' })
+  it('parses a canonical selected month and status', () => {
+    expect(parseTaskListURLState(new URLSearchParams('month=2026-10&status=completed'), '2025-03'))
+      .toEqual({ month: '2026-10', status: 'completed' })
+  })
+
+  it('converts a legacy year link to January', () => {
+    const state = parseTaskListURLState(new URLSearchParams('year=2026&status=active'), '2025-03')
+    const params = taskListSearchParams(new URLSearchParams('year=2026&status=active'), state)
+
+    expect(state).toEqual({ month: '2026-01', status: 'active' })
+    expect(params.toString()).toBe('status=active&month=2026-01')
+    expect(hasCanonicalTaskListSearch(params, state)).toBe(true)
   })
 
   it('replaces invalid values with safe defaults', () => {
-    expect(parseTaskListURLState(new URLSearchParams('year=20x6&status=late'), 2026))
-      .toEqual({ year: 2026, status: 'all' })
+    expect(parseTaskListURLState(new URLSearchParams('month=2026-13&status=late'), '2026-10'))
+      .toEqual({ month: '2026-10', status: 'all' })
   })
 
-  it('preserves unrelated parameters when writing state', () => {
+  it('preserves unrelated parameters and removes legacy year when writing state', () => {
     const params = taskListSearchParams(
-      new URLSearchParams('source=notification'),
-      { year: 2027, status: 'active' },
+      new URLSearchParams('source=notification&year=2025'),
+      { month: '2027-04', status: 'active' },
     )
 
-    expect(params.toString()).toBe('source=notification&year=2027&status=active')
-    expect(hasCanonicalTaskListSearch(params, { year: 2027, status: 'active' })).toBe(true)
+    expect(params.toString()).toBe('source=notification&month=2027-04&status=active')
+    expect(hasCanonicalTaskListSearch(params, { month: '2027-04', status: 'active' })).toBe(true)
   })
 
-  it('builds ordinary and leap year API ranges', () => {
-    expect(taskYearRange(2025)).toEqual({ from: '2025-01-01', to: '2026-01-01' })
-    expect(taskYearRange(2024)).toEqual({ from: '2024-01-01', to: '2025-01-01' })
+  it('builds ordinary, leap-February and year-boundary API ranges', () => {
+    expect(taskMonthRange('2025-02')).toEqual({ from: '2025-02-01', to: '2025-03-01' })
+    expect(taskMonthRange('2024-02')).toEqual({ from: '2024-02-01', to: '2024-03-01' })
+    expect(taskMonthRange('2026-12')).toEqual({ from: '2026-12-01', to: '2027-01-01' })
   })
 
-  it('derives the current year in the user IANA time zone', () => {
+  it('moves continuously across year boundaries', () => {
+    expect(shiftTaskMonth('2026-01', -1)).toBe('2025-12')
+    expect(shiftTaskMonth('2026-12', 1)).toBe('2027-01')
+  })
+
+  it('derives a task month in the user IANA time zone', () => {
     const instant = '2025-12-31T21:30:00Z'
-    expect(taskYearForInstant(instant, 'Europe/Moscow')).toBe(2026)
-    expect(taskYearForInstant(instant, 'America/New_York')).toBe(2025)
+    expect(taskMonthForInstant(instant, 'Europe/Moscow')).toBe('2026-01')
+    expect(taskMonthForInstant(instant, 'America/New_York')).toBe('2025-12')
+  })
+
+  it('derives the current month independently in each user IANA time zone', () => {
+    vi.spyOn(Temporal.Now, 'instant').mockReturnValue(Temporal.Instant.from('2025-12-31T21:30:00Z'))
+
+    expect(currentTaskMonth('Europe/Moscow')).toBe('2026-01')
+    expect(currentTaskMonth('America/New_York')).toBe('2025-12')
+  })
+
+  it('formats the visible month separately from its year', () => {
+    expect(taskMonthLabel('2026-10')).toBe('Октябрь')
+    expect(taskMonthYear('2026-10')).toBe(2026)
   })
 })

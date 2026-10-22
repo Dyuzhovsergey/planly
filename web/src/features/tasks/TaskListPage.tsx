@@ -5,14 +5,15 @@ import { ApiError } from '../../shared/api/client'
 import { ChevronLeftIcon, ChevronRightIcon, PlusIcon } from '../../shared/ui/icons'
 import { listTasks, updateTask } from './api'
 import {
-  currentTaskYear,
+  currentTaskMonth,
   hasCanonicalTaskListSearch,
-  isSelectableTaskYear,
   parseTaskListURLState,
+  shiftTaskMonth,
   taskListSearchParams,
-  taskYearPeriodLabel,
-  taskYearForInstant,
-  taskYearRange,
+  taskMonthForInstant,
+  taskMonthLabel,
+  taskMonthRange,
+  taskMonthYear,
   type TaskStatusFilter,
 } from './task-list-url-state'
 import { TaskDeleteDialog } from './TaskDeleteDialog'
@@ -29,8 +30,8 @@ interface TaskListPageProps {
 
 type LoadState =
   | { status: 'loading' }
-  | { status: 'loaded'; year: number; items: Task[] }
-  | { status: 'error'; year: number }
+  | { status: 'loaded'; month: string; items: Task[] }
+  | { status: 'error'; month: string }
 
 const filters: Array<{ value: TaskStatusFilter; label: string }> = [
   { value: 'all', label: 'Все' },
@@ -44,12 +45,12 @@ export function TaskListPage({
   onAuthenticationRequired,
 }: TaskListPageProps) {
   const [searchParams, setSearchParams] = useSearchParams()
-  const currentYear = useMemo(() => currentTaskYear(timeZone), [timeZone])
+  const currentMonth = useMemo(() => currentTaskMonth(timeZone), [timeZone])
   const urlState = useMemo(
-    () => parseTaskListURLState(searchParams, currentYear),
-    [currentYear, searchParams],
+    () => parseTaskListURLState(searchParams, currentMonth),
+    [currentMonth, searchParams],
   )
-  const range = useMemo(() => taskYearRange(urlState.year), [urlState.year])
+  const range = useMemo(() => taskMonthRange(urlState.month), [urlState.month])
   const [loadState, setLoadState] = useState<LoadState>({ status: 'loading' })
   const [attempt, setAttempt] = useState(0)
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
@@ -70,7 +71,7 @@ export function TaskListPage({
   useEffect(() => {
     const controller = new AbortController()
     void listTasks(range, controller.signal)
-      .then(({ items }) => setLoadState({ status: 'loaded', year: urlState.year, items }))
+      .then(({ items }) => setLoadState({ status: 'loaded', month: urlState.month, items }))
       .catch((error: unknown) => {
         if (controller.signal.aborted) {
           return
@@ -79,20 +80,20 @@ export function TaskListPage({
           onAuthenticationRequired()
           return
         }
-        setLoadState({ status: 'error', year: urlState.year })
+        setLoadState({ status: 'error', month: urlState.month })
       })
 
     return () => controller.abort()
-  }, [attempt, onAuthenticationRequired, range, urlState.year])
+  }, [attempt, onAuthenticationRequired, range, urlState.month])
 
   const tasks = useMemo(
-    () => loadState.status === 'loaded' && loadState.year === urlState.year
+    () => loadState.status === 'loaded' && loadState.month === urlState.month
       ? loadState.items
       : [],
-    [loadState, urlState.year],
+    [loadState, urlState.month],
   )
   const isLoading = loadState.status === 'loading'
-    || ('year' in loadState && loadState.year !== urlState.year)
+    || ('month' in loadState && loadState.month !== urlState.month)
   const counts = useMemo(() => ({
     all: tasks.length,
     active: tasks.filter((task) => !task.completed).length,
@@ -104,13 +105,13 @@ export function TaskListPage({
     return true
   }), [tasks, urlState.status])
 
-  function setURLState(next: { year?: number; status?: TaskStatusFilter }) {
+  function setURLState(next: { month?: string; status?: TaskStatusFilter }) {
     setSelectedTask(null)
     setIsCreateOpen(false)
     setTaskNotice(null)
     setTaskError(null)
     setSearchParams(taskListSearchParams(searchParams, {
-      year: next.year ?? urlState.year,
+      month: next.month ?? urlState.month,
       status: next.status ?? urlState.status,
     }))
   }
@@ -176,10 +177,10 @@ export function TaskListPage({
     setTaskNotice(deletedTask ? `Задача «${deletedTask.title}» удалена.` : 'Задача удалена.')
   }
 
-  function taskYear(task: Task): number {
+  function taskMonth(task: Task): string {
     return task.schedule.type === 'allDay'
-      ? Number(task.schedule.date.slice(0, 4))
-      : taskYearForInstant(task.schedule.at, timeZone)
+      ? task.schedule.date.slice(0, 7)
+      : taskMonthForInstant(task.schedule.at, timeZone)
   }
 
   function toggleCreateForm() {
@@ -201,12 +202,12 @@ export function TaskListPage({
   }
 
   function handleTaskCreated(created: Task) {
-    const createdYear = taskYear(created)
+    const createdMonth = taskMonth(created)
     const isHiddenByFilter = urlState.status === 'completed'
     setIsCreateOpen(false)
     refreshTasks()
-    if (createdYear !== urlState.year) {
-      setTaskNotice(`Задача «${created.title}» создана для ${createdYear} года и не входит в текущий период.`)
+    if (createdMonth !== urlState.month) {
+      setTaskNotice(`Задача «${created.title}» создана вне выбранного месяца.`)
     } else if (isHiddenByFilter) {
       setTaskNotice(`Задача «${created.title}» создана, но скрыта фильтром «Завершённые».`)
     } else {
@@ -216,19 +217,20 @@ export function TaskListPage({
   }
 
   const filterLabel = filters.find((filter) => filter.value === urlState.status)?.label ?? 'Все'
+  const visibleMonth = taskMonthLabel(urlState.month)
+  const visibleYear = taskMonthYear(urlState.month)
+  const previousMonth = shiftTaskMonth(urlState.month, -1)
+  const nextMonth = shiftTaskMonth(urlState.month, 1)
 
   return (
     <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_21rem]">
       <section className="planly-card min-w-0 p-4 sm:p-6" aria-labelledby="task-list-heading">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <p className="planly-eyebrow">Годовой обзор</p>
-            <h1 className="mt-1 min-w-0 text-2xl font-semibold tracking-tight text-[var(--color-ink)]" id="task-list-heading">
+            <h1 className="min-w-0 text-2xl font-semibold tracking-tight text-[var(--color-ink)]" id="task-list-heading">
               Задачи
             </h1>
-            <p className="mt-2 text-sm text-[var(--color-muted)]">
-              Период: <strong className="font-semibold text-[var(--color-ink)]">{taskYearPeriodLabel(urlState.year)}</strong>
-            </p>
+            <p className="mt-1 text-sm font-semibold text-[var(--color-muted)]" aria-live="polite">{visibleYear}</p>
           </div>
           <button
             ref={createButtonRef}
@@ -244,33 +246,33 @@ export function TaskListPage({
           </button>
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center justify-end gap-2" aria-label="Выбор года">
+        <div className="mt-4 flex flex-wrap items-center justify-end gap-2" aria-label="Выбор месяца">
             <button
               className="planly-button-secondary size-11 p-0"
               type="button"
-              aria-label={`Показать ${urlState.year - 1} год`}
-              disabled={!isSelectableTaskYear(urlState.year - 1)}
-              onClick={() => setURLState({ year: urlState.year - 1 })}
+              aria-label="Показать предыдущий месяц"
+              disabled={!previousMonth}
+              onClick={() => previousMonth && setURLState({ month: previousMonth })}
             >
               <ChevronLeftIcon className="size-4" />
             </button>
-            <span className="min-w-20 text-center text-lg font-semibold" aria-live="polite">{urlState.year}</span>
+            <span className="min-w-24 text-center text-lg font-semibold" aria-live="polite">{visibleMonth}</span>
             <button
               className="planly-button-secondary size-11 p-0"
               type="button"
-              aria-label={`Показать ${urlState.year + 1} год`}
-              disabled={!isSelectableTaskYear(urlState.year + 1)}
-              onClick={() => setURLState({ year: urlState.year + 1 })}
+              aria-label="Показать следующий месяц"
+              disabled={!nextMonth}
+              onClick={() => nextMonth && setURLState({ month: nextMonth })}
             >
               <ChevronRightIcon className="size-4" />
             </button>
             <button
               className="planly-button-secondary"
               type="button"
-              disabled={urlState.year === currentYear}
-              onClick={() => setURLState({ year: currentYear })}
+              disabled={urlState.month === currentMonth}
+              onClick={() => setURLState({ month: currentMonth })}
             >
-              Текущий год
+              Текущий месяц
             </button>
         </div>
 
@@ -301,12 +303,12 @@ export function TaskListPage({
         )}
 
         {isLoading && (
-          <p className="mt-6 text-sm text-[var(--color-muted)]" role="status">Загружаем задачи за {urlState.year} год…</p>
+          <p className="mt-6 text-sm text-[var(--color-muted)]" role="status">Загружаем задачи…</p>
         )}
 
-        {loadState.status === 'error' && loadState.year === urlState.year && (
+        {loadState.status === 'error' && loadState.month === urlState.month && (
           <div className="planly-error mt-6" role="alert">
-            <p>Не удалось загрузить задачи за {urlState.year} год.</p>
+            <p>Не удалось загрузить задачи за выбранный месяц.</p>
             <button className="mt-2 min-h-11 font-semibold underline" type="button" onClick={refreshTasks}>
               Повторить
             </button>
@@ -315,13 +317,13 @@ export function TaskListPage({
 
         {loadState.status === 'loaded' && tasks.length === 0 && (
           <p className="mt-6 rounded-2xl bg-[var(--color-surface-muted)] p-5 text-sm leading-6 text-[var(--color-muted)]">
-            За {urlState.year} год задач пока нет. Нажмите «Добавить задачу», чтобы создать первую.
+            В выбранном месяце задач пока нет. Нажмите «Добавить задачу», чтобы создать первую.
           </p>
         )}
 
         {loadState.status === 'loaded' && tasks.length > 0 && visibleTasks.length === 0 && (
           <p className="mt-6 rounded-2xl bg-[var(--color-surface-muted)] p-5 text-sm leading-6 text-[var(--color-muted)]">
-            В фильтре «{filterLabel}» за {urlState.year} год задач нет.
+            В фильтре «{filterLabel}» в выбранном месяце задач нет.
           </p>
         )}
 
@@ -375,7 +377,8 @@ export function TaskListPage({
         ) : (
           <section className="planly-card p-5" aria-labelledby="task-summary-heading">
             <p className="planly-eyebrow">Сводка</p>
-            <h2 className="mt-1 text-lg font-semibold" id="task-summary-heading">{urlState.year} год</h2>
+            <h2 className="mt-1 text-lg font-semibold" id="task-summary-heading">{visibleMonth}</h2>
+            <p className="mt-1 text-sm text-[var(--color-muted)]">{visibleYear}</p>
             <dl className="mt-4 grid grid-cols-3 gap-2 xl:grid-cols-1">
               {filters.map((filter) => (
                 <div className="rounded-xl bg-[var(--color-surface-muted)] p-3" key={filter.value}>
