@@ -26,7 +26,7 @@ import {
   toFullCalendarView,
 } from './calendar-url-state'
 import { TaskAgenda } from './TaskAgenda'
-import { TaskCreateForm } from './TaskCreateForm'
+import { TaskCreateDialog } from './TaskCreateDialog'
 import { TaskDeleteDialog } from './TaskDeleteDialog'
 import { TaskEditForm } from './TaskEditForm'
 import type { Task, TaskListRange } from './types'
@@ -87,6 +87,7 @@ export function TaskCalendarDashboard({
   const [taskPendingDeletion, setTaskPendingDeletion] = useState<Task | null>(null)
   const [taskNotice, setTaskNotice] = useState<string | null>(null)
   const taskPanelRef = useRef<HTMLElement>(null)
+  const createButtonRef = useRef<HTMLButtonElement>(null)
   const calendarAPIRef = useRef<DatesSetInfo['view']['calendar'] | null>(null)
 
   const tasks = useMemo(
@@ -226,29 +227,46 @@ export function TaskCalendarDashboard({
     setAttempt((current) => current + 1)
   }
 
+  function toggleCreateForm() {
+    setTaskNotice(null)
+    if (isCreateOpen) {
+      setIsCreateOpen(false)
+      createButtonRef.current?.focus()
+      return
+    }
+
+    setSelectedTask(null)
+    setIsCreateOpen(true)
+  }
+
+  function closeCreateForm() {
+    setIsCreateOpen(false)
+    createButtonRef.current?.focus()
+  }
+
   const agendaTitle = isMobile ? 'Задачи выбранного дня' : 'Задачи на экране'
 
   return (
     <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_21rem]">
       <section className="planly-card min-w-0 overflow-hidden p-3 sm:p-5" aria-labelledby="calendar-heading">
-        <div className="mb-4 flex items-center justify-between gap-3 px-1">
-          <div>
+        <div className="mb-4 flex items-start justify-between gap-3 px-1">
+          <div className="min-w-0">
             <p className="planly-eyebrow">Ваше расписание</p>
-            <h1 className="mt-1 text-2xl font-semibold tracking-tight text-[var(--color-ink)]" id="calendar-heading">
+            <h1 className="mt-1 min-w-0 text-2xl font-semibold tracking-tight text-[var(--color-ink)]" id="calendar-heading">
               Календарь задач
             </h1>
           </div>
           <button
-            className="planly-button-primary md:hidden"
+            ref={createButtonRef}
+            className="planly-button-primary size-11 shrink-0 p-0"
             type="button"
+            aria-label="Добавить задачу"
+            aria-controls="task-create-dialog"
             aria-expanded={isCreateOpen}
-            onClick={() => {
-              setSelectedTask(null)
-              setIsCreateOpen((current) => !current)
-            }}
+            title="Добавить задачу"
+            onClick={toggleCreateForm}
           >
-            <PlusIcon className="size-4" />
-            Задача
+            <PlusIcon className="size-5" />
           </button>
         </div>
 
@@ -311,22 +329,6 @@ export function TaskCalendarDashboard({
             {taskNotice}
           </p>
         )}
-        {(isCreateOpen || !isMobile) && !selectedTask && (
-          <div className="planly-card p-5">
-            <p className="planly-eyebrow">Быстрое добавление</p>
-            <TaskCreateForm
-              compact
-              csrfToken={csrfToken}
-              timeZone={timeZone}
-              onAuthenticationRequired={onAuthenticationRequired}
-              onTaskCreated={() => {
-                refreshTasks()
-                setIsCreateOpen(false)
-              }}
-            />
-          </div>
-        )}
-
         {selectedTask && (
           <TaskEditForm
             key={`${selectedTask.id}-${selectedTask.updatedAt}`}
@@ -363,6 +365,21 @@ export function TaskCalendarDashboard({
           }}
         />
       </aside>
+
+      {isCreateOpen && !selectedTask && (
+        <TaskCreateDialog
+          csrfToken={csrfToken}
+          timeZone={timeZone}
+          fallbackFocusRef={createButtonRef}
+          onAuthenticationRequired={onAuthenticationRequired}
+          onCancel={closeCreateForm}
+          onTaskCreated={(created) => {
+            refreshTasks()
+            setIsCreateOpen(false)
+            setTaskNotice(`Задача «${created.title}» создана.`)
+          }}
+        />
+      )}
 
       {taskPendingDeletion && (
         <TaskDeleteDialog

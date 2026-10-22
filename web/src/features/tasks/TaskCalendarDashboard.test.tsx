@@ -142,6 +142,57 @@ afterEach(() => {
 })
 
 describe('TaskCalendarDashboard', () => {
+  it('keeps creation hidden until plus is pressed and restores focus after cancellation', () => {
+    vi.stubGlobal('fetch', vi.fn())
+
+    renderDashboard()
+
+    const addButton = screen.getByRole('button', { name: 'Добавить задачу' })
+    expect(addButton).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByRole('heading', { name: 'Новая задача' })).not.toBeInTheDocument()
+
+    fireEvent.click(addButton)
+
+    expect(screen.getByRole('dialog', { name: 'Новая задача' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Название')).toHaveFocus()
+    expect(addButton).toHaveAttribute('aria-expanded', 'true')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Отмена' }))
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(addButton).toHaveFocus()
+  })
+
+  it('creates from the plus panel, closes it and refreshes the calendar', async () => {
+    const created = {
+      ...task,
+      id: '18cb1656-52aa-47dd-a885-51f6dbcae231',
+      title: 'Подать показания',
+      schedule: { type: 'allDay' as const, date: '2026-10-25' },
+    }
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ items: [] }))
+      .mockResolvedValueOnce(jsonResponse(created, 201))
+      .mockResolvedValueOnce(jsonResponse({ items: [created] }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderDashboard()
+    fireEvent.click(screen.getByRole('button', { name: 'Показать диапазон' }))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce())
+    const addButton = screen.getByRole('button', { name: 'Добавить задачу' })
+    fireEvent.click(addButton)
+    fireEvent.change(screen.getByLabelText('Название'), { target: { value: created.title } })
+    fireEvent.click(screen.getByLabelText('Весь день'))
+    fireEvent.change(screen.getByLabelText('Дата'), { target: { value: '2026-10-25' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Создать задачу' }))
+
+    expect(await screen.findByText(`Задача «${created.title}» создана.`)).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByTestId('calendar-task-count')).toHaveTextContent('1'))
+    expect(screen.queryByRole('heading', { name: 'Новая задача' })).not.toBeInTheDocument()
+    expect(addButton).toHaveFocus()
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+  })
+
   it('restores the calendar view and date from the URL', () => {
     vi.stubGlobal('fetch', vi.fn())
 

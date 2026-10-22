@@ -4,10 +4,10 @@
 
 ## Текущий статус
 
-- Стадия: Frontend task list section с адаптивной kanban-доской принят пользователем.
+- Стадия: Frontend task creation entrypoints реализован и прошёл автоматические проверки; требуется браузерная приёмка.
 - Завершённые инкременты: MVP-контракт; Go HTTP-сервер с `GET /health`; PostgreSQL 18.6, миграция `users` и `GET /ready`; Auth foundation; session authentication и `GET /api/v1/me`; изменение часовой зоны через `PATCH /api/v1/me`; Task storage foundation; Task creation API; Task retrieval API; Task list API; Task update API; Task completion API; Task delete API; Frontend foundation; Frontend login/logout; Frontend registration; Frontend automatic time zone; Frontend task creation UI; Frontend task list foundation; Frontend calendar dashboard and task rescheduling; Password policy 8–128; Frontend task completion UI; Frontend task delete UI; Frontend task content editing UI; Containerized API foundation; Frontend container and local reverse proxy foundation; Container stack smoke-test foundation; Brand assets foundation; Frontend routing foundation; Username authentication; Calendar URL state; Frontend task list section.
-- Текущий инкремент: отсутствует; Frontend quick task creation from board предложен и ожидает подтверждения.
-- Следующее действие: согласовать переиспользование существующей формы создания непосредственно в `/tasks` без изменения backend API.
+- Текущий инкремент: Frontend task creation entrypoints — скрытая по умолчанию форма открывается кнопкой `+` в календаре и `/tasks`.
+- Следующее действие: вручную проверить открытие, отмену, создание timed/all-day задач и адаптивность на 375/1440 px; после подтверждения отметить инкремент принятым.
 
 ## Предварительная последовательность
 
@@ -476,3 +476,13 @@
 **Реализация и проверка:** годовой список преобразован в адаптивную доску с двумя колонками при фильтре «Все» и одной колонкой при статусном фильтре. Desktop drag-handle оптимистично переносит плитку и отправляет только `completed` с CSRF; ошибка возвращает исходную Task. Явная кнопка завершения/повторного открытия остаётся keyboard/touch-альтернативой. Unit/component-тесты проверяют перенос, CSRF, отсутствие `userId` и rollback. Прошли frontend lint, 108 тестов, production build и `docker compose config --quiet`.
 
 **Статус:** принят пользователем после ручной проверки внешнего вида, фильтров, переноса в обе стороны, сохранения после refresh и rollback при сетевой ошибке.
+
+### Frontend task creation entrypoints
+
+**Цель и границы:** убрать постоянно видимую форму из календаря и предоставить единый явный вход в создание задачи через кнопку `+` в правом верхнем углу основных плиток календаря и доски. Backend API, БД, зависимости и недельный режим не меняются.
+
+**Архитектурные решения:** обе страницы условно монтируют общий `TaskCreateDialog` через portal поверх затемнённого интерфейса; внутри без дублирования API-логики используется существующий `TaskCreateForm`. Кнопка имеет 44×44 px, SVG-иконку, `aria-label`, `aria-expanded` и `aria-controls`; click/tap/Enter открывает modal и фокусирует title. Dialog блокирует фоновую прокрутку, удерживает keyboard-focus и закрывается через «Отмена», `Escape` или backdrop, кроме времени отправки запроса. После отмены или `201` фокус возвращается кнопке; текущий диапазон перечитывается без изменения URL, а для задачи вне выбранного года или скрытой фильтром выводится пояснение. POST по-прежнему использует session-cookie, CSRF из памяти и не отправляет `userId`.
+
+**Проверка:** component-тесты покрывают скрытое начальное состояние, modal semantics, блокировку прокрутки, focus trap/restore, `Escape`, backdrop, запрет закрытия во время отправки, создание из календаря и доски, обновление данных, payload без `userId`, другой год и скрывающий фильтр. Прошли frontend lint, 117 тестов, production build и `docker compose config --quiet`; требуется ручная проверка на desktop/mobile.
+
+**Статус:** реализован; ожидает браузерной приёмки пользователем.

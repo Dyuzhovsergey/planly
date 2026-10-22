@@ -25,6 +25,13 @@ const completedTask: Task = {
   completedAt: '2026-10-20T16:00:00Z',
 }
 
+const createdTask: Task = {
+  ...activeTask,
+  id: 'e77d79dc-8621-4b34-8a6c-a6f92ad89542',
+  title: 'Подать показания',
+  schedule: { type: 'allDay', date: '2026-10-25' },
+}
+
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -71,6 +78,84 @@ afterEach(() => {
 })
 
 describe('TaskListPage', () => {
+  it('opens creation from plus, creates a task and refreshes the current board', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ items: [activeTask] }))
+      .mockResolvedValueOnce(jsonResponse(createdTask, 201))
+      .mockResolvedValueOnce(jsonResponse({ items: [activeTask, createdTask] }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderTaskList()
+    await screen.findByText('Позвонить врачу')
+    const addButton = screen.getByRole('button', { name: 'Добавить задачу' })
+    expect(screen.queryByRole('heading', { name: 'Новая задача' })).not.toBeInTheDocument()
+
+    fireEvent.click(addButton)
+    expect(screen.getByRole('dialog', { name: 'Новая задача' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Название')).toHaveFocus()
+    fireEvent.change(screen.getByLabelText('Название'), { target: { value: createdTask.title } })
+    fireEvent.click(screen.getByLabelText('Весь день'))
+    fireEvent.change(screen.getByLabelText('Дата'), { target: { value: '2026-10-25' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Создать задачу' }))
+
+    expect(await screen.findByText(`Задача «${createdTask.title}» создана.`)).toBeInTheDocument()
+    expect(await screen.findByText(createdTask.title)).toBeInTheDocument()
+    expect(addButton).toHaveFocus()
+    const [, init] = fetchMock.mock.calls[1]
+    expect(init.method).toBe('POST')
+    expect(new Headers(init.headers).get('X-CSRF-Token')).toBe('csrf-in-memory')
+    expect(JSON.parse(init.body as string)).toEqual({
+      title: createdTask.title,
+      description: '',
+      schedule: { type: 'allDay', date: '2026-10-25' },
+    })
+    expect(init.body).not.toContain('userId')
+  })
+
+  it('explains when a created task is outside the selected year', async () => {
+    const nextYearTask = {
+      ...createdTask,
+      id: '1bd7dd5e-65c4-4512-ad07-242bb3b14e27',
+      schedule: { type: 'allDay' as const, date: '2027-01-02' },
+    }
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ items: [] }))
+      .mockResolvedValueOnce(jsonResponse(nextYearTask, 201))
+      .mockResolvedValueOnce(jsonResponse({ items: [] }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderTaskList()
+    await screen.findByText(/За 2026 год задач пока нет/)
+    fireEvent.click(screen.getByRole('button', { name: 'Добавить задачу' }))
+    fireEvent.change(screen.getByLabelText('Название'), { target: { value: nextYearTask.title } })
+    fireEvent.click(screen.getByLabelText('Весь день'))
+    fireEvent.change(screen.getByLabelText('Дата'), { target: { value: '2027-01-02' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Создать задачу' }))
+
+    expect(await screen.findByText(/не входит в текущий период/)).toBeInTheDocument()
+    expect(screen.getByTestId('task-list-location')).toHaveTextContent('year=2026')
+  })
+
+  it('explains when a new active task is hidden by the completed filter', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ items: [completedTask] }))
+      .mockResolvedValueOnce(jsonResponse(createdTask, 201))
+      .mockResolvedValueOnce(jsonResponse({ items: [completedTask, createdTask] }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderTaskList('/tasks?year=2026&status=completed')
+    await screen.findByText(completedTask.title)
+    fireEvent.click(screen.getByRole('button', { name: 'Добавить задачу' }))
+    fireEvent.change(screen.getByLabelText('Название'), { target: { value: createdTask.title } })
+    fireEvent.click(screen.getByLabelText('Весь день'))
+    fireEvent.change(screen.getByLabelText('Дата'), { target: { value: '2026-10-25' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Создать задачу' }))
+
+    expect(await screen.findByText(/скрыта фильтром «Завершённые»/)).toBeInTheDocument()
+    expect(screen.queryByText(createdTask.title)).not.toBeInTheDocument()
+    expect(screen.getByTestId('task-list-location')).toHaveTextContent('status=completed')
+  })
+
   it('loads the selected year, shows its period and filters without another request', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ items: [activeTask, completedTask] }))
     vi.stubGlobal('fetch', fetchMock)

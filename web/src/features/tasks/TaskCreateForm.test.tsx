@@ -65,6 +65,26 @@ afterEach(() => {
 })
 
 describe('TaskCreateForm', () => {
+  it('focuses the title on request and exposes cancellation', () => {
+    const onCancel = vi.fn()
+
+    render(
+      <TaskCreateForm
+        autoFocus
+        compact
+        csrfToken="csrf-token-kept-in-memory"
+        timeZone="Europe/Moscow"
+        onAuthenticationRequired={vi.fn()}
+        onCancel={onCancel}
+        onTaskCreated={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByLabelText('Название')).toHaveFocus()
+    fireEvent.click(screen.getByRole('button', { name: 'Отмена' }))
+    expect(onCancel).toHaveBeenCalledOnce()
+  })
+
   it('creates a timed task with cookie credentials and in-memory CSRF', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(timedTask, 201))
     vi.stubGlobal('fetch', fetchMock)

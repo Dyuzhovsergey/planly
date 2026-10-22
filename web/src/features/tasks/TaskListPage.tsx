@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router'
 
 import { ApiError } from '../../shared/api/client'
-import { ChevronLeftIcon, ChevronRightIcon } from '../../shared/ui/icons'
+import { ChevronLeftIcon, ChevronRightIcon, PlusIcon } from '../../shared/ui/icons'
 import { listTasks, updateTask } from './api'
 import {
   currentTaskYear,
@@ -11,11 +11,13 @@ import {
   parseTaskListURLState,
   taskListSearchParams,
   taskYearPeriodLabel,
+  taskYearForInstant,
   taskYearRange,
   type TaskStatusFilter,
 } from './task-list-url-state'
 import { TaskDeleteDialog } from './TaskDeleteDialog'
 import { TaskEditForm } from './TaskEditForm'
+import { TaskCreateDialog } from './TaskCreateDialog'
 import { TaskBoard } from './TaskBoard'
 import type { Task } from './types'
 
@@ -55,7 +57,9 @@ export function TaskListPage({
   const [taskNotice, setTaskNotice] = useState<string | null>(null)
   const [taskError, setTaskError] = useState<string | null>(null)
   const [pendingTaskID, setPendingTaskID] = useState<string | null>(null)
+  const [isCreateOpen, setIsCreateOpen] = useState(false)
   const taskPanelRef = useRef<HTMLElement>(null)
+  const createButtonRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     if (!hasCanonicalTaskListSearch(searchParams, urlState)) {
@@ -102,6 +106,7 @@ export function TaskListPage({
 
   function setURLState(next: { year?: number; status?: TaskStatusFilter }) {
     setSelectedTask(null)
+    setIsCreateOpen(false)
     setTaskNotice(null)
     setTaskError(null)
     setSearchParams(taskListSearchParams(searchParams, {
@@ -171,23 +176,75 @@ export function TaskListPage({
     setTaskNotice(deletedTask ? `Задача «${deletedTask.title}» удалена.` : 'Задача удалена.')
   }
 
+  function taskYear(task: Task): number {
+    return task.schedule.type === 'allDay'
+      ? Number(task.schedule.date.slice(0, 4))
+      : taskYearForInstant(task.schedule.at, timeZone)
+  }
+
+  function toggleCreateForm() {
+    setTaskNotice(null)
+    setTaskError(null)
+    if (isCreateOpen) {
+      setIsCreateOpen(false)
+      createButtonRef.current?.focus()
+      return
+    }
+
+    setSelectedTask(null)
+    setIsCreateOpen(true)
+  }
+
+  function closeCreateForm() {
+    setIsCreateOpen(false)
+    createButtonRef.current?.focus()
+  }
+
+  function handleTaskCreated(created: Task) {
+    const createdYear = taskYear(created)
+    const isHiddenByFilter = urlState.status === 'completed'
+    setIsCreateOpen(false)
+    refreshTasks()
+    if (createdYear !== urlState.year) {
+      setTaskNotice(`Задача «${created.title}» создана для ${createdYear} года и не входит в текущий период.`)
+    } else if (isHiddenByFilter) {
+      setTaskNotice(`Задача «${created.title}» создана, но скрыта фильтром «Завершённые».`)
+    } else {
+      setTaskNotice(`Задача «${created.title}» создана.`)
+    }
+    createButtonRef.current?.focus()
+  }
+
   const filterLabel = filters.find((filter) => filter.value === urlState.status)?.label ?? 'Все'
 
   return (
     <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_21rem]">
       <section className="planly-card min-w-0 p-4 sm:p-6" aria-labelledby="task-list-heading">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
             <p className="planly-eyebrow">Годовой обзор</p>
-            <h1 className="mt-1 text-2xl font-semibold tracking-tight text-[var(--color-ink)]" id="task-list-heading">
+            <h1 className="mt-1 min-w-0 text-2xl font-semibold tracking-tight text-[var(--color-ink)]" id="task-list-heading">
               Задачи
             </h1>
             <p className="mt-2 text-sm text-[var(--color-muted)]">
               Период: <strong className="font-semibold text-[var(--color-ink)]">{taskYearPeriodLabel(urlState.year)}</strong>
             </p>
           </div>
+          <button
+            ref={createButtonRef}
+            className="planly-button-primary size-11 shrink-0 p-0"
+            type="button"
+            aria-label="Добавить задачу"
+            aria-controls="task-create-dialog"
+            aria-expanded={isCreateOpen}
+            title="Добавить задачу"
+            onClick={toggleCreateForm}
+          >
+            <PlusIcon className="size-5" />
+          </button>
+        </div>
 
-          <div className="flex flex-wrap items-center gap-2" aria-label="Выбор года">
+        <div className="mt-4 flex flex-wrap items-center justify-end gap-2" aria-label="Выбор года">
             <button
               className="planly-button-secondary size-11 p-0"
               type="button"
@@ -215,7 +272,6 @@ export function TaskListPage({
             >
               Текущий год
             </button>
-          </div>
         </div>
 
         <div className="mt-6 grid grid-cols-3 gap-2" aria-label="Фильтр задач">
@@ -259,7 +315,7 @@ export function TaskListPage({
 
         {loadState.status === 'loaded' && tasks.length === 0 && (
           <p className="mt-6 rounded-2xl bg-[var(--color-surface-muted)] p-5 text-sm leading-6 text-[var(--color-muted)]">
-            За {urlState.year} год задач пока нет. Создать задачу можно в разделе «Календарь».
+            За {urlState.year} год задач пока нет. Нажмите «Добавить задачу», чтобы создать первую.
           </p>
         )}
 
@@ -281,6 +337,7 @@ export function TaskListPage({
               onEditTask={(task) => {
                 setTaskNotice(null)
                 setTaskError(null)
+                setIsCreateOpen(false)
                 setSelectedTask(task)
               }}
               onMoveTask={(task, completed) => void moveTask(task, completed)}
@@ -333,6 +390,17 @@ export function TaskListPage({
           </section>
         )}
       </aside>
+
+      {isCreateOpen && (
+        <TaskCreateDialog
+          csrfToken={csrfToken}
+          timeZone={timeZone}
+          fallbackFocusRef={createButtonRef}
+          onAuthenticationRequired={onAuthenticationRequired}
+          onCancel={closeCreateForm}
+          onTaskCreated={handleTaskCreated}
+        />
+      )}
 
       {taskPendingDeletion && (
         <TaskDeleteDialog

@@ -7,9 +7,11 @@ import type { CreateTaskInput, Task, TaskSchedule } from './types'
 
 interface TaskCreateFormProps {
   compact?: boolean
+  autoFocus?: boolean
   csrfToken: string
   timeZone: string
   onAuthenticationRequired: () => void
+  onCancel?: () => void
   onTaskCreated: (task: Task) => void
 }
 
@@ -24,9 +26,11 @@ interface FieldErrors {
 
 export function TaskCreateForm({
   compact = false,
+  autoFocus = false,
   csrfToken,
   timeZone,
   onAuthenticationRequired,
+  onCancel,
   onTaskCreated,
 }: TaskCreateFormProps) {
   const [title, setTitle] = useState('')
@@ -43,6 +47,12 @@ export function TaskCreateForm({
   const descriptionInput = useRef<HTMLTextAreaElement>(null)
   const scheduledAtInput = useRef<HTMLInputElement>(null)
   const scheduledDateInput = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (autoFocus) {
+      titleInput.current?.focus()
+    }
+  }, [autoFocus])
 
   useEffect(() => {
     if (isSubmitting) {
@@ -360,13 +370,25 @@ export function TaskCreateForm({
           </div>
         )}
 
-        <button
-          className="planly-button-primary w-full"
-          type="submit"
-          disabled={isSubmitting}
-        >
-          {isSubmitting ? 'Создаём задачу…' : 'Создать задачу'}
-        </button>
+        <div className={`grid gap-2 ${onCancel ? 'sm:grid-cols-2' : ''}`}>
+          <button
+            className="planly-button-primary w-full"
+            type="submit"
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? 'Создаём задачу…' : 'Создать задачу'}
+          </button>
+          {onCancel && (
+            <button
+              className="planly-button-secondary w-full"
+              type="button"
+              disabled={isSubmitting}
+              onClick={onCancel}
+            >
+              Отмена
+            </button>
+          )}
+        </div>
       </form>
     </section>
   )
