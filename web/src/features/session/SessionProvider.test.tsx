@@ -28,6 +28,10 @@ vi.mock('../tasks/TaskCalendarDashboard', async () => {
   }
 })
 
+vi.mock('../tasks/TaskListPage', () => ({
+  TaskListPage: () => <h1>Годовой список задач</h1>,
+}))
+
 const authEnvelope = {
   user: {
     id: 'user-id',
@@ -134,6 +138,23 @@ describe('session restoration', () => {
       '/api/v1/me',
       expect.objectContaining({ credentials: 'include' }),
     )
+  })
+
+  it('navigates between the protected calendar and task list sections', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(authEnvelope)))
+
+    renderApplication('/app')
+    const taskLinks = await screen.findAllByRole('link', { name: 'Задачи' })
+    fireEvent.click(taskLinks[0])
+
+    expect(await screen.findByRole('heading', { name: 'Годовой список задач' })).toBeInTheDocument()
+    await expectLocation('/tasks')
+    screen.getAllByRole('link', { name: 'Задачи' }).forEach((link) => {
+      expect(link).toHaveAttribute('aria-current', 'page')
+    })
+
+    fireEvent.click(screen.getAllByRole('link', { name: 'Календарь' })[0])
+    await expectLocation('/app')
   })
 
   it('treats an unauthorized response as an anonymous session', async () => {

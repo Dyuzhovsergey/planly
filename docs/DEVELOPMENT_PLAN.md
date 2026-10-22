@@ -4,10 +4,10 @@
 
 ## Текущий статус
 
-- Стадия: Calendar URL state принят; следующий инкремент — отдельный годовой раздел задач.
+- Стадия: Frontend task list section с компактной kanban-доской «Активные / Завершённые» реализован и прошёл автоматические проверки; требуется браузерная приёмка.
 - Завершённые инкременты: MVP-контракт; Go HTTP-сервер с `GET /health`; PostgreSQL 18.6, миграция `users` и `GET /ready`; Auth foundation; session authentication и `GET /api/v1/me`; изменение часовой зоны через `PATCH /api/v1/me`; Task storage foundation; Task creation API; Task retrieval API; Task list API; Task update API; Task completion API; Task delete API; Frontend foundation; Frontend login/logout; Frontend registration; Frontend automatic time zone; Frontend task creation UI; Frontend task list foundation; Frontend calendar dashboard and task rescheduling; Password policy 8–128; Frontend task completion UI; Frontend task delete UI; Frontend task content editing UI; Containerized API foundation; Frontend container and local reverse proxy foundation; Container stack smoke-test foundation; Brand assets foundation; Frontend routing foundation; Username authentication; Calendar URL state.
-- Текущий инкремент: Frontend task list section — предложен и согласован, реализация ещё не начата.
-- Следующее действие: создать ветку `feat/frontend-task-list-section` и реализовать `/tasks?year=&status=`.
+- Текущий инкремент: Frontend task list section — `/tasks` показывает выбранный год и фильтры статуса, переиспользуя существующие операции с задачами.
+- Следующее действие: вручную проверить `/tasks` на desktop/mobile, перенос плитки в обе стороны, сохранение после обновления страницы и откат при сетевой ошибке; после подтверждения отметить инкремент принятым.
 
 ## Предварительная последовательность
 
@@ -462,3 +462,17 @@
 **Проверка и критерии готовности:** component/unit-тесты покрывают defaults, валидные и некорректные параметры, переключение вида и даты, refresh, Back/Forward и отсутствие повторной загрузки при эквивалентном URL. В браузере прямой URL должен открыть нужную дату и вид на desktop и mobile.
 
 **Статус:** принят пользователем после ручной проверки прямого URL, refresh, Back/Forward и синхронизации выбранных даты и вида.
+
+### Frontend task list section
+
+**Цель и границы:** добавить после календаря отдельный защищённый раздел `/tasks` для просмотра задач за выбранный календарный год. Backend API, БД, миграции, создание задач и пагинация не меняются.
+
+**Архитектурные решения:** общий authenticated app shell содержит desktop/mobile-навигацию «Календарь / Задачи», профиль и logout. Год и фильтр являются URL-состоянием `/tasks?year=YYYY&status=all|active|completed`; неверные значения канонизируются через `replace`, а текущий год определяется в `User.timeZone`. Frontend одним запросом загружает полуинтервал от 1 января выбранного года до 1 января следующего и локально фильтрует все, активные и завершённые задачи. Agenda сохраняет компактный `TaskListItems`, а годовой экран использует отдельный `TaskBoard`; оба представления переиспользуют существующие `TaskEditForm`, `TaskCompletionControl` и `TaskDeleteDialog`. `userId` и time zone в запрос не передаются.
+
+**Проверка и критерии готовности:** unit/component-тесты покрывают обычный и високосный диапазоны, IANA-границу года, канонизацию URL, смену года без устаревших данных, локальные фильтры без повторного GET, retry/401 и операции PATCH/DELETE. Frontend lint/test/build и Compose smoke должны пройти; Nginx должен отдавать SPA при прямом открытии `/tasks`. Требуется ручная проверка desktop/mobile, refresh, Back/Forward и операций с задачами.
+
+**Согласованное визуальное продолжение:** корректный референс — раздел Tasks из [Bento dashboard animation](https://www.instagram.com/reel/DeHGjlZPIHF/). Экран развивается как компактная kanban-доска: при фильтре «Все» рядом расположены колонки «Активные» и «Завершённые», задача представлена небольшой плиткой, а перенос между колонками завершает или повторно открывает её через существующий PATCH. Явные действия завершения/возврата сохраняются как доступная альтернатива. Внутриколоночная ручная сортировка, дополнительные workflow-статусы и backend-изменения в этот UI-инкремент не входят.
+
+**Реализация и проверка:** годовой список преобразован в адаптивную доску с двумя колонками при фильтре «Все» и одной колонкой при статусном фильтре. Desktop drag-handle оптимистично переносит плитку и отправляет только `completed` с CSRF; ошибка возвращает исходную Task. Явная кнопка завершения/повторного открытия остаётся keyboard/touch-альтернативой. Unit/component-тесты проверяют перенос, CSRF, отсутствие `userId` и rollback. Прошли frontend lint, 108 тестов, production build и `docker compose config --quiet`.
+
+**Статус:** реализован; ожидает браузерной проверки адаптивности, визуальной композиции и drag-and-drop пользователем.

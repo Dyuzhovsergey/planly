@@ -235,6 +235,80 @@
     white-space: nowrap;
     font-weight: 650;
   }
+
+  .planly-task-column {
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid var(--color-border);
+    border-radius: 1.25rem;
+    background: color-mix(in srgb, var(--color-surface-muted) 84%, white);
+    transition: border-color 180ms ease, background-color 180ms ease, box-shadow 180ms ease;
+  }
+
+  .planly-task-column--over {
+    border-color: var(--color-accent);
+    background: color-mix(in srgb, var(--color-accent-soft) 48%, white);
+    box-shadow: 0 0 0 3px rgb(49 95 60 / 10%);
+  }
+
+  .planly-task-tile {
+    border: 1px solid var(--color-border);
+    border-radius: 1rem;
+    background: white;
+    padding: 0.875rem;
+    box-shadow: 0 1px 2px rgb(29 45 28 / 5%);
+    transition: border-color 180ms ease, box-shadow 180ms ease, opacity 180ms ease, transform 180ms ease;
+  }
+
+  .planly-task-tile:hover {
+    border-color: color-mix(in srgb, var(--color-accent) 45%, var(--color-border));
+    box-shadow: 0 8px 22px rgb(29 45 28 / 8%);
+    transform: translateY(-1px);
+  }
+
+  .planly-task-tile--completed {
+    background: color-mix(in srgb, var(--color-surface-muted) 62%, white);
+  }
+
+  .planly-task-tile--dragging {
+    opacity: 0.45;
+    box-shadow: 0 14px 28px rgb(29 45 28 / 14%);
+    transform: rotate(1deg) scale(0.985);
+  }
+
+  .planly-task-drag-handle {
+    display: grid;
+    width: 2.75rem;
+    height: 2.75rem;
+    flex: none;
+    cursor: grab;
+    place-items: center;
+    border: 0;
+    border-radius: 0.75rem;
+    background: transparent;
+    color: var(--color-muted);
+    transition: background-color 180ms ease, color 180ms ease, transform 180ms ease;
+  }
+
+  .planly-task-drag-handle:hover {
+    background: var(--color-surface-muted);
+    color: var(--color-ink);
+  }
+
+  .planly-task-drag-handle:active {
+    cursor: grabbing;
+    transform: scale(0.96);
+  }
+
+  .planly-task-drag-handle:focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+
+  .planly-task-drag-handle:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
 }
 
 @media (max-width: 767px) {

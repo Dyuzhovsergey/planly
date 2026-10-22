@@ -8,6 +8,7 @@ import type { Task } from './types'
 interface TaskCompletionControlProps {
   task: Task
   csrfToken: string
+  disabled?: boolean
   onAuthenticationRequired: () => void
   onUpdated: (task: Task) => void
 }
@@ -15,6 +16,7 @@ interface TaskCompletionControlProps {
 export function TaskCompletionControl({
   task,
   csrfToken,
+  disabled = false,
   onAuthenticationRequired,
   onUpdated,
 }: TaskCompletionControlProps) {
@@ -24,7 +26,7 @@ export function TaskCompletionControl({
   const action = nextCompleted ? 'Завершить' : 'Открыть повторно'
 
   async function handleClick() {
-    if (isSubmitting) {
+    if (isSubmitting || disabled) {
       return
     }
 
@@ -54,7 +56,7 @@ export function TaskCompletionControl({
       <button
         className="planly-button-secondary w-full text-sm"
         type="button"
-        disabled={isSubmitting}
+        disabled={isSubmitting || disabled}
         aria-label={`${action} задачу ${task.title}`}
         onClick={() => void handleClick()}
       >

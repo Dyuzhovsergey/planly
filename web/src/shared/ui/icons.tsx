@@ -20,6 +20,30 @@ export function CalendarIcon({ className = 'size-5' }: IconProps) {
   )
 }
 
+export function TasksIcon({ className = 'size-5' }: IconProps) {
+  return (
+    <svg {...common} className={className}>
+      <path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01" />
+    </svg>
+  )
+}
+
+export function ChevronLeftIcon({ className = 'size-5' }: IconProps) {
+  return (
+    <svg {...common} className={className}>
+      <path d="m14 6-6 6 6 6" />
+    </svg>
+  )
+}
+
+export function ChevronRightIcon({ className = 'size-5' }: IconProps) {
+  return (
+    <svg {...common} className={className}>
+      <path d="m10 6 6 6-6 6" />
+    </svg>
+  )
+}
+
 export function PlusIcon({ className = 'size-5' }: IconProps) {
   return (
     <svg {...common} className={className}>
@@ -65,6 +89,27 @@ export function TrashIcon({ className = 'size-5' }: IconProps) {
   return (
     <svg {...common} className={className}>
       <path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5" />
+    </svg>
+  )
+}
+
+export function PencilIcon({ className = 'size-5' }: IconProps) {
+  return (
+    <svg {...common} className={className}>
+      <path d="m4 20 4.2-1 10.4-10.4a2.1 2.1 0 0 0-3-3L5.2 16 4 20ZM13.8 7.2l3 3" />
+    </svg>
+  )
+}
+
+export function DragHandleIcon({ className = 'size-5' }: IconProps) {
+  return (
+    <svg {...common} className={className}>
+      <circle cx="8" cy="7" r="1" fill="currentColor" stroke="none" />
+      <circle cx="16" cy="7" r="1" fill="currentColor" stroke="none" />
+      <circle cx="8" cy="12" r="1" fill="currentColor" stroke="none" />
+      <circle cx="16" cy="12" r="1" fill="currentColor" stroke="none" />
+      <circle cx="8" cy="17" r="1" fill="currentColor" stroke="none" />
+      <circle cx="16" cy="17" r="1" fill="currentColor" stroke="none" />
     </svg>
   )
 }

@@ -1,16 +1,22 @@
 import { lazy, Suspense, useState } from 'react'
-import { Link, Navigate, Route, Routes, useNavigate } from 'react-router'
+import { Link, Navigate, NavLink, Outlet, Route, Routes, useNavigate } from 'react-router'
 
 import { LoginForm } from '../features/session/LoginForm'
 import { RegistrationForm } from '../features/session/RegistrationForm'
 import { useSession } from '../features/session/session-context'
 import type { LoginCredentials, RegistrationInput } from '../features/session/types'
-import { CalendarIcon, LogOutIcon } from '../shared/ui/icons'
+import { CalendarIcon, LogOutIcon, TasksIcon } from '../shared/ui/icons'
 import { PlanlyLogo } from '../shared/ui/PlanlyLogo'
 
 const TaskCalendarDashboard = lazy(() =>
   import('../features/tasks/TaskCalendarDashboard').then((module) => ({
     default: module.TaskCalendarDashboard,
+  })),
+)
+
+const TaskListPage = lazy(() =>
+  import('../features/tasks/TaskListPage').then((module) => ({
+    default: module.TaskListPage,
   })),
 )
 
@@ -22,7 +28,10 @@ export function App() {
       <Route path="/" element={<SessionEntryRoute />} />
       <Route path="/login" element={<AnonymousRoute mode="login" />} />
       <Route path="/register" element={<AnonymousRoute mode="registration" />} />
-      <Route path="/app" element={<ProtectedAppRoute />} />
+      <Route element={<ProtectedAppRoute />}>
+        <Route path="/app" element={<CalendarScreen />} />
+        <Route path="/tasks" element={<TaskListScreen />} />
+      </Route>
       <Route path="*" element={<SessionEntryRoute />} />
     </Routes>
   )
@@ -61,7 +70,7 @@ function ProtectedAppRoute() {
     return <Navigate replace to="/login" />
   }
 
-  return <CalendarScreen />
+  return <AuthenticatedAppShell />
 }
 
 function SessionStatus() {
@@ -131,8 +140,8 @@ function AuthScreen({ mode }: { mode: AuthMode }) {
   )
 }
 
-function CalendarScreen() {
-  const { state, retry, logout } = useSession()
+function AuthenticatedAppShell() {
+  const { state, logout } = useSession()
   const navigate = useNavigate()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [logoutError, setLogoutError] = useState(false)
@@ -157,14 +166,13 @@ function CalendarScreen() {
 
   return (
     <main className="min-h-dvh bg-[var(--color-canvas)] text-[var(--color-ink)]">
-      <a className="planly-skip-link" href="#planly-workspace">Перейти к календарю</a>
+      <a className="planly-skip-link" href="#planly-workspace">Перейти к основному содержимому</a>
       <div className="mx-auto grid min-h-dvh max-w-[1720px] lg:grid-cols-[14rem_minmax(0,1fr)]">
         <aside className="hidden border-r border-[var(--color-border)] bg-[var(--color-sidebar)] px-5 py-6 lg:flex lg:flex-col" aria-label="Основная навигация">
           <PlanlyLogo showTagline />
-          <nav className="mt-10" aria-label="Разделы приложения">
-            <span className="flex min-h-11 items-center gap-3 rounded-2xl bg-[var(--color-accent-soft)] px-3 text-sm font-semibold text-[var(--color-accent-strong)]" aria-current="page">
-              <CalendarIcon className="size-4" />Календарь
-            </span>
+          <nav className="mt-10 space-y-1" aria-label="Разделы приложения">
+            <AppNavigationLink to="/app" label="Календарь" icon={<CalendarIcon className="size-4" />} />
+            <AppNavigationLink to="/tasks" label="Задачи" icon={<TasksIcon className="size-4" />} />
           </nav>
           <div className="mt-auto rounded-3xl border border-[var(--color-border)] bg-white/70 p-4">
             <p className="text-xs font-medium uppercase tracking-[0.12em] text-[var(--color-muted)]">Аккаунт</p>
@@ -180,14 +188,64 @@ function CalendarScreen() {
             <PlanlyLogo compact />
             <button className="grid size-11 cursor-pointer place-items-center rounded-xl text-[var(--color-muted)] hover:bg-[var(--color-surface-muted)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]" type="button" aria-label="Выйти из мобильного интерфейса" disabled={isLoggingOut} onClick={handleLogout}><LogOutIcon /></button>
           </header>
+          <nav className="grid grid-cols-2 gap-2 border-b border-[var(--color-border)] bg-[var(--color-sidebar)] px-4 py-2 lg:hidden" aria-label="Разделы приложения">
+            <AppNavigationLink to="/app" label="Календарь" icon={<CalendarIcon className="size-4" />} />
+            <AppNavigationLink to="/tasks" label="Задачи" icon={<TasksIcon className="size-4" />} />
+          </nav>
           <div className="p-3 sm:p-5 lg:p-7" id="planly-workspace">
             {logoutError && <p className="planly-error mb-4" role="alert">Не удалось выйти. Проверьте соединение и повторите попытку.</p>}
-            <Suspense fallback={<p className="planly-card p-5 text-sm text-[var(--color-muted)]" role="status">Открываем календарь…</p>}>
-              <TaskCalendarDashboard timeZone={state.user.timeZone} csrfToken={state.csrfToken} onAuthenticationRequired={retry} />
-            </Suspense>
+            <Outlet />
           </div>
         </div>
       </div>
     </main>
+  )
+}
+
+function AppNavigationLink({
+  to,
+  label,
+  icon,
+}: {
+  to: string
+  label: string
+  icon: React.ReactNode
+}) {
+  return (
+    <NavLink
+      className={({ isActive }) => `flex min-h-11 items-center justify-center gap-2 rounded-2xl px-3 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)] lg:justify-start ${isActive
+        ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent-strong)]'
+        : 'text-[var(--color-muted)] hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-ink)]'}`}
+      to={to}
+    >
+      {icon}
+      {label}
+    </NavLink>
+  )
+}
+
+function CalendarScreen() {
+  const { state, retry } = useSession()
+  if (state.status !== 'authenticated') {
+    return null
+  }
+
+  return (
+    <Suspense fallback={<p className="planly-card p-5 text-sm text-[var(--color-muted)]" role="status">Открываем календарь…</p>}>
+      <TaskCalendarDashboard timeZone={state.user.timeZone} csrfToken={state.csrfToken} onAuthenticationRequired={retry} />
+    </Suspense>
+  )
+}
+
+function TaskListScreen() {
+  const { state, retry } = useSession()
+  if (state.status !== 'authenticated') {
+    return null
+  }
+
+  return (
+    <Suspense fallback={<p className="planly-card p-5 text-sm text-[var(--color-muted)]" role="status">Открываем задачи…</p>}>
+      <TaskListPage timeZone={state.user.timeZone} csrfToken={state.csrfToken} onAuthenticationRequired={retry} />
+    </Suspense>
   )
 }
