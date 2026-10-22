@@ -87,6 +87,91 @@ afterEach(() => {
 })
 
 describe('TaskListPage', () => {
+  it('searches locally together with status, updates URL and clears with focus restoration', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ items: [activeTask, completedTask] }))
+    vi.stubGlobal('fetch', fetchMock)
+    renderTaskList()
+    await screen.findByText(activeTask.title)
+
+    const input = screen.getByRole('searchbox', { name: 'Поиск задач' })
+    fireEvent.change(input, { target: { value: 'ВРАЧУ' } })
+    expect(screen.getByText(activeTask.title)).toBeInTheDocument()
+    expect(screen.queryByText(completedTask.title)).not.toBeInTheDocument()
+    expect(screen.getByText('Показано 1 из 2')).toBeInTheDocument()
+    expect(new URLSearchParams(screen.getByTestId('task-list-location').textContent?.split('?')[1]).get('q')).toBe('ВРАЧУ')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Завершённые' }))
+    expect(screen.getByText('Ничего не найдено. Измените запрос или фильтр.')).toBeInTheDocument()
+    expect(input).toHaveValue('ВРАЧУ')
+    fireEvent.click(screen.getByRole('button', { name: 'Очистить поиск' }))
+    expect(input).toHaveFocus()
+    expect(input).toHaveValue('')
+    expect(screen.getByText(completedTask.title)).toBeInTheDocument()
+    expect(screen.getByTestId('task-list-location').textContent).not.toContain('q=')
+    expect(fetchMock).toHaveBeenCalledOnce()
+  })
+
+  it('restores description search from a direct URL and retains it across months', async () => {
+    const described = { ...activeTask, description: 'Уточнить кабинет' }
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ items: [described, completedTask] }))
+      .mockResolvedValueOnce(jsonResponse({ items: [] }))
+    vi.stubGlobal('fetch', fetchMock)
+    renderTaskList('/tasks?month=2026-10&status=all&q=кабинет')
+    await screen.findByText(activeTask.title)
+    expect(screen.queryByText(completedTask.title)).not.toBeInTheDocument()
+    expect(screen.getByRole('searchbox')).toHaveValue('кабинет')
+    fireEvent.click(screen.getByRole('button', { name: 'Показать следующий месяц' }))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    expect(screen.getByRole('searchbox')).toHaveValue('кабинет')
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/v1/tasks?from=2026-11-01&to=2026-12-01')
+  })
+
+  it('keeps the editing draft while search hides its task and recomputes results after save', async () => {
+    const updated = { ...activeTask, title: 'Позвонить терапевту' }
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ items: [activeTask] }))
+      .mockResolvedValueOnce(jsonResponse(updated))
+      .mockResolvedValueOnce(jsonResponse({ items: [updated] }))
+    vi.stubGlobal('fetch', fetchMock)
+    renderTaskList()
+    fireEvent.click(await screen.findByRole('button', { name: `Редактировать задачу ${activeTask.title}` }))
+    fireEvent.change(screen.getByLabelText('Название'), { target: { value: updated.title } })
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'врачу' } })
+    expect(screen.getByLabelText('Название')).toHaveValue(updated.title)
+    expect(fetchMock).toHaveBeenCalledOnce()
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
+    expect(await screen.findByText('Ничего не найдено. Измените запрос или фильтр.')).toBeInTheDocument()
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3))
+    expect(screen.queryByRole('button', { name: `Редактировать задачу ${updated.title}` })).not.toBeInTheDocument()
+  })
+
+  it('replaces search history entries instead of pushing on every keystroke', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(() => Promise.resolve(jsonResponse({ items: [] }))))
+    renderTaskList(['/tasks?month=2026-09&status=all', '/tasks?month=2026-10&status=all'])
+    await screen.findByText(/В выбранном месяце задач пока нет/)
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'вр' } })
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'врач' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Назад в тесте' }))
+    await waitFor(() => expect(screen.getByTestId('task-list-location')).toHaveTextContent('month=2026-09'))
+    fireEvent.click(screen.getByRole('button', { name: 'Вперёд в тесте' }))
+    await waitFor(() => expect(screen.getByRole('searchbox')).toHaveValue('врач'))
+  })
+
+  it('recomputes search with the active filter after completion without refetching', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ items: [activeTask, completedTask] }))
+      .mockResolvedValueOnce(jsonResponse({ ...activeTask, completed: true, completedAt: '2026-10-22T12:00:00Z' }))
+    vi.stubGlobal('fetch', fetchMock)
+    renderTaskList('/tasks?month=2026-10&status=active&q=врачу')
+    fireEvent.click(await screen.findByRole('button', { name: `Завершить задачу ${activeTask.title}` }))
+    expect(await screen.findByText('Показано 0 из 2')).toBeInTheDocument()
+    expect(screen.getByText('Ничего не найдено. Измените запрос или фильтр.')).toBeInTheDocument()
+    expect(screen.getByRole('searchbox')).toHaveValue('врачу')
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(fetchMock.mock.calls[1][1].method).toBe('PATCH')
+  })
+
   it('opens creation from plus, creates a task and refreshes the current board', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(jsonResponse({ items: [activeTask] }))

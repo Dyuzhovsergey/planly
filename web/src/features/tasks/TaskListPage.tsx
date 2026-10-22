@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router'
 import { ApiError } from '../../shared/api/client'
 import { ChevronLeftIcon, ChevronRightIcon, PlusIcon } from '../../shared/ui/icons'
 import { listTasks, updateTask } from './api'
+import { matchesTaskSearch } from './task-search'
 import {
   currentTaskMonth,
   hasCanonicalTaskListSearch,
@@ -61,6 +62,7 @@ export function TaskListPage({
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const taskPanelRef = useRef<HTMLElement>(null)
   const createButtonRef = useRef<HTMLButtonElement>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!hasCanonicalTaskListSearch(searchParams, urlState)) {
@@ -100,10 +102,11 @@ export function TaskListPage({
     completed: tasks.filter((task) => task.completed).length,
   }), [tasks])
   const visibleTasks = useMemo(() => tasks.filter((task) => {
+    if (!matchesTaskSearch(task, urlState.q)) return false
     if (urlState.status === 'active') return !task.completed
     if (urlState.status === 'completed') return task.completed
     return true
-  }), [tasks, urlState.status])
+  }), [tasks, urlState.status, urlState.q])
 
   function setURLState(next: { month?: string; status?: TaskStatusFilter }) {
     setSelectedTask(null)
@@ -111,9 +114,14 @@ export function TaskListPage({
     setTaskNotice(null)
     setTaskError(null)
     setSearchParams(taskListSearchParams(searchParams, {
+      ...urlState,
       month: next.month ?? urlState.month,
       status: next.status ?? urlState.status,
     }))
+  }
+
+  function setSearchQuery(q: string) {
+    setSearchParams(taskListSearchParams(searchParams, { ...urlState, q }), { replace: true })
   }
 
   function refreshTasks() {
@@ -210,6 +218,8 @@ export function TaskListPage({
       setTaskNotice(`Задача «${created.title}» создана вне выбранного месяца.`)
     } else if (isHiddenByFilter) {
       setTaskNotice(`Задача «${created.title}» создана, но скрыта фильтром «Завершённые».`)
+    } else if (!matchesTaskSearch(created, urlState.q)) {
+      setTaskNotice(`Задача «${created.title}» создана, но не соответствует поисковому запросу.`)
     } else {
       setTaskNotice(`Задача «${created.title}» создана.`)
     }
@@ -276,7 +286,35 @@ export function TaskListPage({
             </button>
         </div>
 
-        <div className="mt-6 grid grid-cols-3 gap-2" aria-label="Фильтр задач">
+        <div className="mt-6">
+          <label className="block text-sm font-medium text-[var(--color-ink)]" htmlFor="task-search">Поиск задач</label>
+          <div className="relative mt-2">
+            <input
+              ref={searchInputRef}
+              className="planly-input pr-12 [&::-webkit-search-cancel-button]:appearance-none"
+              id="task-search"
+              type="search"
+              placeholder="Название или описание"
+              value={urlState.q}
+              onChange={(event) => setSearchQuery(event.target.value)}
+            />
+            {urlState.q && (
+              <button
+                className="absolute right-0 top-0 grid size-11 cursor-pointer place-items-center rounded-xl text-[var(--color-muted)] hover:text-[var(--color-ink)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]"
+                type="button"
+                aria-label="Очистить поиск"
+                onClick={() => {
+                  setSearchQuery('')
+                  searchInputRef.current?.focus()
+                }}
+              >
+                <PlusIcon className="size-4 rotate-45" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-4 grid grid-cols-3 gap-2" aria-label="Фильтр задач">
           {filters.map((filter) => (
             <button
               className={`min-h-11 cursor-pointer rounded-xl px-2 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)] ${urlState.status === filter.value
@@ -291,6 +329,12 @@ export function TaskListPage({
             </button>
           ))}
         </div>
+
+        {loadState.status === 'loaded' && !isLoading && (
+          <p className="mt-3 text-sm text-[var(--color-muted)]" role="status">
+            Показано {visibleTasks.length} из {tasks.length}
+          </p>
+        )}
 
         {taskNotice && (
           <p className="mt-4 rounded-xl bg-[var(--color-accent-soft)] p-3 text-sm text-[var(--color-accent-strong)]" role="status">
@@ -315,15 +359,17 @@ export function TaskListPage({
           </div>
         )}
 
-        {loadState.status === 'loaded' && tasks.length === 0 && (
+        {loadState.status === 'loaded' && !isLoading && tasks.length === 0 && (
           <p className="mt-6 rounded-2xl bg-[var(--color-surface-muted)] p-5 text-sm leading-6 text-[var(--color-muted)]">
             В выбранном месяце задач пока нет. Нажмите «Добавить задачу», чтобы создать первую.
           </p>
         )}
 
-        {loadState.status === 'loaded' && tasks.length > 0 && visibleTasks.length === 0 && (
+        {loadState.status === 'loaded' && !isLoading && tasks.length > 0 && visibleTasks.length === 0 && (
           <p className="mt-6 rounded-2xl bg-[var(--color-surface-muted)] p-5 text-sm leading-6 text-[var(--color-muted)]">
-            В фильтре «{filterLabel}» в выбранном месяце задач нет.
+            {urlState.q
+              ? 'Ничего не найдено. Измените запрос или фильтр.'
+              : `В фильтре «${filterLabel}» в выбранном месяце задач нет.`}
           </p>
         )}
 

@@ -5,6 +5,7 @@ export type TaskStatusFilter = 'all' | 'active' | 'completed'
 export interface TaskListURLState {
   month: string
   status: TaskStatusFilter
+  q: string
 }
 
 const monthNames = [
@@ -42,7 +43,8 @@ export function parseTaskListURLState(
     ? searchParams.get('status') as TaskStatusFilter
     : 'all'
 
-  return { month, status }
+  const rawQuery = searchParams.get('q') ?? ''
+  return { month, status, q: rawQuery.trim() ? rawQuery : '' }
 }
 
 export function taskListSearchParams(
@@ -53,6 +55,11 @@ export function taskListSearchParams(
   next.set('month', state.month)
   next.set('status', state.status)
   next.delete('year')
+  if (state.q.trim()) {
+    next.set('q', state.q)
+  } else {
+    next.delete('q')
+  }
   return next
 }
 
@@ -63,6 +70,7 @@ export function hasCanonicalTaskListSearch(
   return searchParams.get('month') === state.month
     && searchParams.get('status') === state.status
     && !searchParams.has('year')
+    && (state.q ? searchParams.get('q') === state.q : !searchParams.has('q'))
 }
 
 export function taskMonthRange(month: string): { from: string; to: string } {
