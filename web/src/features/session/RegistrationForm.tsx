@@ -112,7 +112,7 @@ export function RegistrationForm({ onRegister }: RegistrationFormProps) {
     >
       <div>
         <label
-          className="block text-sm font-medium text-slate-800"
+          className="block text-sm font-medium text-[var(--color-ink)]"
           htmlFor="registration-username"
         >
           Логин
@@ -133,12 +133,12 @@ export function RegistrationForm({ onRegister }: RegistrationFormProps) {
           aria-describedby={fieldErrors.username ? 'registration-username-error' : 'registration-username-help'}
           onChange={(event) => setUsername(event.target.value)}
         />
-        <p className="mt-2 text-sm text-slate-600" id="registration-username-help">
+        <p className="mt-2 text-sm text-[var(--color-muted)]" id="registration-username-help">
           3–32 символа: латинские буквы, цифры, точка, дефис или подчёркивание.
         </p>
         {fieldErrors.username && (
           <p
-            className="mt-2 text-sm text-red-700"
+            className="mt-2 text-sm text-[var(--color-danger)]"
             id="registration-username-error"
             role="alert"
           >
@@ -149,7 +149,7 @@ export function RegistrationForm({ onRegister }: RegistrationFormProps) {
 
       <div>
         <label
-          className="block text-sm font-medium text-slate-800"
+          className="block text-sm font-medium text-[var(--color-ink)]"
           htmlFor="registration-email"
         >
           Email
@@ -171,7 +171,7 @@ export function RegistrationForm({ onRegister }: RegistrationFormProps) {
         />
         {fieldErrors.email && (
           <p
-            className="mt-2 text-sm text-red-700"
+            className="mt-2 text-sm text-[var(--color-danger)]"
             id="registration-email-error"
             role="alert"
           >
@@ -183,7 +183,7 @@ export function RegistrationForm({ onRegister }: RegistrationFormProps) {
       <div>
         <div className="flex items-center justify-between gap-4">
           <label
-            className="block text-sm font-medium text-slate-800"
+            className="block text-sm font-medium text-[var(--color-ink)]"
             htmlFor="registration-password"
           >
             Пароль
@@ -216,12 +216,12 @@ export function RegistrationForm({ onRegister }: RegistrationFormProps) {
           }
           onChange={(event) => setPassword(event.target.value)}
         />
-        <p className="mt-2 text-sm text-slate-600" id="registration-password-help">
+        <p className="mt-2 text-sm text-[var(--color-muted)]" id="registration-password-help">
           От 8 до 128 символов.
         </p>
         {fieldErrors.password && (
           <p
-            className="mt-2 text-sm text-red-700"
+            className="mt-2 text-sm text-[var(--color-danger)]"
             id="registration-password-error"
             role="alert"
           >
@@ -231,7 +231,7 @@ export function RegistrationForm({ onRegister }: RegistrationFormProps) {
       </div>
 
       {formError && (
-        <p className="rounded-lg bg-red-50 p-3 text-sm text-red-800" role="alert">
+        <p className="rounded-lg bg-[var(--color-danger-soft)] p-3 text-sm text-[var(--color-danger)]" role="alert">
           {formError}
         </p>
       )}

@@ -1,5 +1,14 @@
+import { useOccurrences } from '../recurrence/useOccurrences'
+import { occurrenceTask, sortCalendarItems } from '../recurrence/view'
+import { OccurrenceDialog } from '../recurrence/OccurrenceDialog'
+import { RecurrenceLoadNotice } from '../recurrence/LoadNotice'
+import type { Occurrence } from '../recurrence/types'
+import { changeOccurrence } from '../recurrence/api'
+import { recurrenceFailure } from '../recurrence/rule'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router'
+import { SuccessNotice } from '../../shared/ui/SuccessNotice'
+import { SegmentedControl } from '../../shared/ui/SegmentedControl'
 
 import { ApiError } from '../../shared/api/client'
 import { ChevronLeftIcon, ChevronRightIcon, PlusIcon } from '../../shared/ui/icons'
@@ -52,6 +61,8 @@ export function TaskListPage({
     [currentMonth, searchParams],
   )
   const range = useMemo(() => taskMonthRange(urlState.month), [urlState.month])
+  const repeats=useOccurrences('task',range,timeZone,onAuthenticationRequired)
+  const [occurrence,setOccurrence]=useState<{value:Occurrence;mode?:'details'|'delete'}|null>(null)
   const [loadState, setLoadState] = useState<LoadState>({ status: 'loading' })
   const [attempt, setAttempt] = useState(0)
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
@@ -88,12 +99,7 @@ export function TaskListPage({
     return () => controller.abort()
   }, [attempt, onAuthenticationRequired, range, urlState.month])
 
-  const tasks = useMemo(
-    () => loadState.status === 'loaded' && loadState.month === urlState.month
-      ? loadState.items
-      : [],
-    [loadState, urlState.month],
-  )
+  const tasks = useMemo(()=>sortCalendarItems([...(loadState.status==='loaded'&&loadState.month===urlState.month?loadState.items:[]),...repeats.items.map(occurrenceTask)],timeZone),[loadState,urlState.month,repeats.items,timeZone])
   const isLoading = loadState.status === 'loading'
     || ('month' in loadState && loadState.month !== urlState.month)
   const counts = useMemo(() => ({
@@ -130,6 +136,7 @@ export function TaskListPage({
   }
 
   function replaceTask(updated: Task) {
+    if(updated.recurrence){repeats.refresh();return}
     setLoadState((current) => current.status === 'loaded'
       ? {
           ...current,
@@ -144,6 +151,13 @@ export function TaskListPage({
       return
     }
 
+    if(task.recurrence){
+      setPendingTaskID(task.id);setTaskNotice(null);setTaskError(null)
+      try{await changeOccurrence(task.recurrence,{completed},csrfToken);repeats.refresh();setTaskNotice(completed?'Повторение задачи выполнено.':'Повторение открыто повторно.')}
+      catch(error:unknown){if(error instanceof ApiError&&error.status===401)onAuthenticationRequired();else setTaskError(recurrenceFailure(error))}
+      finally{setPendingTaskID(null)}
+      return
+    }
     const previousTask = task
     setTaskNotice(null)
     setTaskError(null)
@@ -314,21 +328,9 @@ export function TaskListPage({
           </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-3 gap-2" aria-label="Фильтр задач">
-          {filters.map((filter) => (
-            <button
-              className={`min-h-11 cursor-pointer rounded-xl px-2 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)] ${urlState.status === filter.value
-                ? 'bg-[var(--color-accent)] text-white'
-                : 'bg-[var(--color-surface-muted)] text-[var(--color-muted)] hover:text-[var(--color-ink)]'}`}
-              type="button"
-              aria-pressed={urlState.status === filter.value}
-              key={filter.value}
-              onClick={() => setURLState({ status: filter.value })}
-            >
-              {filter.label} <span aria-hidden="true">· {counts[filter.value]}</span>
-            </button>
-          ))}
-        </div>
+        <SegmentedControl className="mt-4" label="Фильтр задач" value={urlState.status}
+          options={filters.map((filter) => ({ value: filter.value, label: <>{filter.label} <span aria-hidden="true">· {counts[filter.value]}</span></> }))}
+          onValueChange={(status) => setURLState({ status })} />
 
         {loadState.status === 'loaded' && !isLoading && (
           <p className="mt-3 text-sm text-[var(--color-muted)]" role="status">
@@ -337,13 +339,12 @@ export function TaskListPage({
         )}
 
         {taskNotice && (
-          <p className="mt-4 rounded-xl bg-[var(--color-accent-soft)] p-3 text-sm text-[var(--color-accent-strong)]" role="status">
-            {taskNotice}
-          </p>
+          <SuccessNotice className="mt-4">{taskNotice}</SuccessNotice>
         )}
 
+        <RecurrenceLoadNotice kind="task" data={repeats}/>
         {taskError && (
-          <p className="planly-error mt-4" role="alert">{taskError}</p>
+          <div className="planly-error mt-4" role="alert"><p>{taskError}</p><button type="button" className="planly-button-secondary mt-2" onClick={()=>{refreshTasks();repeats.refresh();setTaskError(null)}}>Обновить список</button></div>
         )}
 
         {isLoading && (
@@ -359,7 +360,7 @@ export function TaskListPage({
           </div>
         )}
 
-        {loadState.status === 'loaded' && !isLoading && tasks.length === 0 && (
+        {loadState.status === 'loaded' && !isLoading && repeats.status==='loaded' && tasks.length === 0 && (
           <p className="mt-6 rounded-2xl bg-[var(--color-surface-muted)] p-5 text-sm leading-6 text-[var(--color-muted)]">
             В выбранном месяце задач пока нет. Нажмите «Добавить задачу», чтобы создать первую.
           </p>
@@ -373,7 +374,7 @@ export function TaskListPage({
           </p>
         )}
 
-        {loadState.status === 'loaded' && visibleTasks.length > 0 && (
+        {(loadState.status === 'loaded'||repeats.items.length>0) && visibleTasks.length > 0 && (
           <div className="mt-6">
             <TaskBoard
               tasks={visibleTasks}
@@ -383,6 +384,7 @@ export function TaskListPage({
               pendingTaskID={pendingTaskID}
               onAuthenticationRequired={onAuthenticationRequired}
               onEditTask={(task) => {
+                if(task.recurrence){setOccurrence({value:task.recurrence});return}
                 setTaskNotice(null)
                 setTaskError(null)
                 setIsCreateOpen(false)
@@ -391,11 +393,12 @@ export function TaskListPage({
               onMoveTask={(task, completed) => void moveTask(task, completed)}
               onTaskUpdated={(updated) => {
                 replaceTask(updated)
-                setTaskNotice(updated.completed
+                setTaskNotice(updated.recurrence ? 'Состояние повторения обновлено.' : updated.completed
                   ? `Задача «${updated.title}» завершена.`
                   : `Задача «${updated.title}» открыта повторно.`)
               }}
               onDeleteTask={(task) => {
+                if(task.recurrence){setOccurrence({value:task.recurrence,mode:'delete'});return}
                 setTaskNotice(null)
                 setTaskError(null)
                 setTaskPendingDeletion(task)
@@ -447,10 +450,12 @@ export function TaskListPage({
           fallbackFocusRef={createButtonRef}
           onAuthenticationRequired={onAuthenticationRequired}
           onCancel={closeCreateForm}
+          onSeriesCreated={()=>{setIsCreateOpen(false);repeats.refresh();setTaskNotice('Серия задач создана. Повторения вне выбранного месяца или фильтра появятся при смене условий.')}}
           onTaskCreated={handleTaskCreated}
         />
       )}
 
+      {occurrence&&<OccurrenceDialog key={`${occurrence.value.seriesId}/${occurrence.value.occurrenceDate}`} initial={occurrence.value} initialMode={occurrence.mode} timeZone={timeZone} csrfToken={csrfToken} fallbackFocusRef={taskPanelRef} onAuthenticationRequired={onAuthenticationRequired} onClose={()=>{setOccurrence(null);repeats.refresh()}} onChanged={message=>{setOccurrence(null);repeats.refresh();setTaskNotice(message)}}/>}
       {taskPendingDeletion && (
         <TaskDeleteDialog
           task={taskPendingDeletion}

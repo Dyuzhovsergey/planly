@@ -1,3 +1,4 @@
+import type { TimeFormat } from '../../shared/calendar/preferences'
 import { Temporal } from 'temporal-polyfill'
 
 const localDateTimePattern =
@@ -30,11 +31,13 @@ export function formatTaskSchedule(
     | { type: 'timed'; at: string }
     | { type: 'allDay'; date: string },
   timeZone: string,
+  timeFormat: TimeFormat = '24h',
 ): string {
   if (schedule.type === 'timed') {
     return new Intl.DateTimeFormat('ru-RU', {
       dateStyle: 'long',
       timeStyle: 'short',
+      hour12: timeFormat === '12h',
       timeZone,
     }).format(new Date(schedule.at))
   }
@@ -77,10 +80,12 @@ export function zonedDateTimeToRFC3339(
   }
 
   try {
-    return Temporal.PlainDateTime.from(value)
-      .toZonedDateTime(timeZone)
-      .toInstant()
-      .toString()
+    const local = Temporal.PlainDateTime.from(value)
+    const zoned = local.toZonedDateTime(timeZone, { disambiguation: 'compatible' })
+    if (!zoned.toPlainDateTime().equals(local) || local.year < 1 || local.year > 9999) return null
+    const instant = zoned.toInstant()
+    const utcYear = instant.toZonedDateTimeISO('UTC').year
+    return utcYear >= 1 && utcYear <= 9999 ? instant.toString() : null
   } catch {
     return null
   }

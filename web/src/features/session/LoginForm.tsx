@@ -76,7 +76,7 @@ export function LoginForm({ onLogin }: LoginFormProps) {
   return (
     <form className="mt-6 space-y-5" noValidate onSubmit={handleSubmit} aria-busy={isSubmitting}>
       <div>
-        <label className="block text-sm font-medium text-slate-800" htmlFor="username">
+        <label className="block text-sm font-medium text-[var(--color-ink)]" htmlFor="username">
           Логин
         </label>
         <input
@@ -94,7 +94,7 @@ export function LoginForm({ onLogin }: LoginFormProps) {
           onChange={(event) => setUsername(event.target.value)}
         />
         {fieldErrors.username && (
-          <p className="mt-2 text-sm text-red-700" id="username-error" role="alert">
+          <p className="mt-2 text-sm text-[var(--color-danger)]" id="username-error" role="alert">
             {fieldErrors.username}
           </p>
         )}
@@ -102,7 +102,7 @@ export function LoginForm({ onLogin }: LoginFormProps) {
 
       <div>
         <div className="flex items-center justify-between gap-4">
-          <label className="block text-sm font-medium text-slate-800" htmlFor="password">
+          <label className="block text-sm font-medium text-[var(--color-ink)]" htmlFor="password">
             Пароль
           </label>
           <button
@@ -130,14 +130,14 @@ export function LoginForm({ onLogin }: LoginFormProps) {
           onChange={(event) => setPassword(event.target.value)}
         />
         {fieldErrors.password && (
-          <p className="mt-2 text-sm text-red-700" id="password-error" role="alert">
+          <p className="mt-2 text-sm text-[var(--color-danger)]" id="password-error" role="alert">
             {fieldErrors.password}
           </p>
         )}
       </div>
 
       {formError && (
-        <p className="rounded-lg bg-red-50 p-3 text-sm text-red-800" role="alert">
+        <p className="rounded-lg bg-[var(--color-danger-soft)] p-3 text-sm text-[var(--color-danger)]" role="alert">
           {formError}
         </p>
       )}

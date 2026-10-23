@@ -1,12 +1,18 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { CalendarPreferencesContext } from '../../shared/calendar/preferences'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, useLocation, useNavigate } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { getBirthday, listBirthdayOccurrences, saveBirthday } from '../birthdays/api'
+import { getEvent, listEvents, saveEvent } from '../events/api'
 import { TaskCalendarDashboard } from './TaskCalendarDashboard'
 import type { Task } from './types'
 
 interface CalendarMockProps {
   initialView: string
+  firstDay: number
+  eventTimeFormat: { hour12: boolean }
+  slotHeaderFormat: { hour12: boolean }
   initialDate: string
   events: Array<{ id?: string; title?: string; startEditable?: boolean }>
   datesSet: (info: {
@@ -14,6 +20,7 @@ interface CalendarMockProps {
     end: Date
     view: { type: string; calendar: typeof calendarHarness.api }
   }) => void
+  eventClick: (info: unknown) => void
   eventDrop: (info: unknown) => void
 }
 
@@ -30,6 +37,10 @@ const calendarHarness = vi.hoisted(() => ({
     }),
   },
 }))
+
+vi.mock('../birthdays/api', () => ({ listBirthdays: vi.fn(async () => ({ items: [] })), listBirthdayOccurrences: vi.fn(async () => ({ items: [] })), getBirthday: vi.fn(), saveBirthday: vi.fn(), deleteBirthday: vi.fn() }))
+
+vi.mock('../events/api', () => ({ listEvents: vi.fn(async () => ({ items: [] })), getEvent: vi.fn(), saveEvent: vi.fn(), deleteEvent: vi.fn() }))
 
 vi.mock('@fullcalendar/react', () => ({
   default: (props: CalendarMockProps) => {
@@ -62,6 +73,7 @@ vi.mock('@fullcalendar/react', () => ({
         <button type="button" onClick={() => showRange('timeGridDay', '2026-10-21')}>
           Перейти к дню
         </button>
+        {props.events[0] && <button type="button" onClick={() => props.eventClick({ event: { id: props.events[0]?.id } })}>Открыть запись календаря</button>}
         {props.events[0] && (
           <button
             type="button"
@@ -137,21 +149,38 @@ afterEach(() => {
   calendarHarness.api.view.type = 'dayGridMonth'
   calendarHarness.api.getDate.mockClear()
   calendarHarness.api.changeView.mockClear()
+  vi.mocked(listBirthdayOccurrences).mockReset().mockResolvedValue({ items: [] })
+  vi.mocked(listEvents).mockReset().mockResolvedValue({ items: [] })
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
 })
 
 describe('TaskCalendarDashboard', () => {
+  it('changes the view through the shared control and restores the selection on Back', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ items: [] })))
+    renderDashboard(vi.fn(), '/app?view=month&date=2026-10-01&source=test')
+    fireEvent.click(screen.getByRole('button', { name: 'Показать диапазон' }))
+    const control = screen.getByRole('group', { name: 'Вид календаря' })
+    fireEvent.click(within(control).getByRole('button', { name: 'Неделя' }))
+    await waitFor(() => {
+      expect(screen.getByTestId('calendar-location')).toHaveTextContent('view=week&date=2026-10-01&source=test')
+      expect(calendarHarness.api.changeView).toHaveBeenCalledWith('timeGridWeek', '2026-10-01')
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Назад' }))
+    await waitFor(() => expect(within(control).getByRole('button', { name: 'Месяц' })).toHaveAttribute('aria-pressed', 'true'))
+  })
+
   it('keeps creation hidden until plus is pressed and restores focus after cancellation', () => {
     vi.stubGlobal('fetch', vi.fn())
 
     renderDashboard()
 
-    const addButton = screen.getByRole('button', { name: 'Добавить задачу' })
+    const addButton = screen.getByRole('button', { name: 'Добавить запись' })
     expect(addButton).toHaveAttribute('aria-expanded', 'false')
     expect(screen.queryByRole('heading', { name: 'Новая задача' })).not.toBeInTheDocument()
 
     fireEvent.click(addButton)
+    fireEvent.click(screen.getByRole('button', { name: 'Задачу' }))
 
     expect(screen.getByRole('dialog', { name: 'Новая задача' })).toBeInTheDocument()
     expect(screen.getByLabelText('Название')).toHaveFocus()
@@ -179,8 +208,9 @@ describe('TaskCalendarDashboard', () => {
     renderDashboard()
     fireEvent.click(screen.getByRole('button', { name: 'Показать диапазон' }))
     await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce())
-    const addButton = screen.getByRole('button', { name: 'Добавить задачу' })
+    const addButton = screen.getByRole('button', { name: 'Добавить запись' })
     fireEvent.click(addButton)
+    fireEvent.click(screen.getByRole('button', { name: 'Задачу' }))
     fireEvent.change(screen.getByLabelText('Название'), { target: { value: created.title } })
     fireEvent.click(screen.getByLabelText('Весь день'))
     fireEvent.change(screen.getByLabelText('Дата'), { target: { value: '2026-10-25' } })
@@ -345,6 +375,29 @@ describe('TaskCalendarDashboard', () => {
     expect(JSON.parse(fetchMock.mock.calls[1][1].body as string)).toEqual({ completed: true })
   })
 
+
+  it('keeps the task dialog open during completion and restores focus after Escape', async () => {
+    let resolveUpdate: (response: Response) => void = () => undefined
+    const pending = new Promise<Response>((resolve) => { resolveUpdate = resolve })
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(jsonResponse({ items: [task] })).mockReturnValueOnce(pending))
+    renderDashboard()
+    fireEvent.click(screen.getByRole('button', { name: 'Показать диапазон' }))
+    await screen.findByText(task.title)
+    const opener = screen.getByRole('button', { name: 'Открыть запись календаря' })
+    opener.focus()
+    fireEvent.click(opener)
+    const dialog = screen.getByRole('dialog', { name: 'Задача' })
+    fireEvent.click(within(dialog).getByRole('button', { name: `Завершить задачу ${task.title}` }))
+    fireEvent.keyDown(dialog, { key: 'Escape' })
+    expect(dialog).toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: 'Изменить' })).toBeDisabled()
+    resolveUpdate(jsonResponse({ ...task, completed: true, completedAt: '2026-10-22T12:00:00Z' }))
+    expect(await within(dialog).findByText('Выполнена')).toBeInTheDocument()
+    fireEvent.keyDown(dialog, { key: 'Escape' })
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(opener).toHaveFocus()
+  })
+
   it('updates the agenda and calendar after editing task content', async () => {
     const updated = {
       ...task,
@@ -363,7 +416,10 @@ describe('TaskCalendarDashboard', () => {
     await screen.findByText('Позвонить врачу')
     expect(screen.getByTestId('calendar-task-title')).toHaveAttribute('data-title', task.title)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Редактировать задачу Позвонить врачу' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Открыть запись календаря' }))
+    expect(screen.getByRole('dialog', { name: 'Задача' })).toHaveTextContent(task.title)
+    expect(screen.queryByLabelText('Название')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Изменить' }))
     fireEvent.change(screen.getByLabelText('Название'), { target: { value: updated.title } })
     fireEvent.change(screen.getByLabelText(/Описание/), { target: { value: updated.description } })
     fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
@@ -422,4 +478,94 @@ describe('TaskCalendarDashboard', () => {
     expect(screen.getByTestId('calendar')).toHaveAttribute('data-view', 'timeGridDay')
     expect(screen.getByRole('heading', { name: 'Задачи выбранного дня' })).toBeInTheDocument()
   })
+
+  it('combines namespaced meetings with tasks and filters visibility without refetching', async () => {
+    const meeting = { id: task.id, title: 'Встреча', description: '', location: '', link: '', schedule: { type: 'allDay' as const, startDate: '2026-10-21', endDate: '2026-10-23' }, createdAt: task.createdAt, updatedAt: task.updatedAt }
+    vi.mocked(listEvents).mockResolvedValue({ items: [meeting] })
+    vi.mocked(getEvent).mockResolvedValue(meeting)
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ items: [task] })))
+    renderDashboard()
+    fireEvent.click(screen.getByRole('button', { name: 'Показать диапазон' }))
+    await waitFor(() => expect(screen.getByTestId('calendar-task-count')).toHaveTextContent('2'))
+    expect(calendarHarness.props?.events.map((value) => value.id)).toEqual([task.id, `event:${task.id}`])
+    expect(calendarHarness.props?.events[1].startEditable).toBe(false)
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Мероприятия' }))
+    expect(screen.getByTestId('calendar-task-count')).toHaveTextContent('1')
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Мероприятия' }))
+    expect(vi.mocked(listEvents)).toHaveBeenCalledTimes(1)
+    fireEvent.click(screen.getByRole('button', { name: /Встреча/ }))
+    expect(await screen.findByRole('dialog', { name: 'Мероприятие' })).toBeInTheDocument()
+    expect(getEvent).toHaveBeenCalledWith(meeting.id, expect.any(AbortSignal))
+  })
+
+  it('creates a meeting from the calendar picker and reloads the visible range', async () => {
+    const meeting = { id: 'new-event', title: 'Новая встреча', description: '', location: '', link: '', schedule: { type: 'allDay' as const, startDate: '2026-10-01', endDate: '2026-10-02' }, createdAt: task.createdAt, updatedAt: task.updatedAt }
+    vi.mocked(saveEvent).mockResolvedValue(meeting)
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ items: [] })))
+    renderDashboard()
+    fireEvent.click(screen.getByRole('button', { name: 'Показать диапазон' }))
+    await waitFor(() => expect(listEvents).toHaveBeenCalledTimes(1))
+    fireEvent.click(screen.getByRole('button', { name: 'Добавить запись' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Мероприятие' }))
+    fireEvent.change(screen.getByLabelText('Название'), { target: { value: meeting.title } })
+    fireEvent.click(screen.getByLabelText('Весь день'))
+    vi.mocked(listEvents).mockResolvedValue({ items: [meeting] })
+    fireEvent.click(screen.getByRole('button', { name: 'Создать мероприятие' }))
+    await waitFor(() => expect(saveEvent).toHaveBeenCalledOnce())
+    await waitFor(() => expect(listEvents).toHaveBeenCalledTimes(2))
+    expect(await screen.findByText(/Мероприятие «Новая встреча» сохранено/)).toBeInTheDocument()
+  })
+
+  it('shows birthdays alongside tasks/events with distinct IDs and opens the source', async () => {
+    const source = { id: task.id, name: 'Маша', month: 2, day: 29, birthYear: 2000, note: 'Поздравить', createdAt: task.createdAt, updatedAt: task.updatedAt }
+    const occurrence = { birthdayId: source.id, name: source.name, date: '2026-10-22', age: 26 }
+    vi.mocked(listBirthdayOccurrences).mockResolvedValue({ items: [occurrence] })
+    vi.mocked(getBirthday).mockResolvedValue(source)
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ items: [task] })))
+    renderDashboard()
+    fireEvent.click(screen.getByRole('button', { name: 'Показать диапазон' }))
+    await waitFor(() => expect(screen.getByTestId('calendar-task-count')).toHaveTextContent('2'))
+    expect(calendarHarness.props?.events.map((value) => value.id)).toEqual([task.id, `birthday:${task.id}:2026-10-22`])
+    expect(calendarHarness.props?.events[1].startEditable).toBe(false)
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Дни рождения' }))
+    expect(screen.getByTestId('calendar-task-count')).toHaveTextContent('1')
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Дни рождения' }))
+    expect(listBirthdayOccurrences).toHaveBeenCalledTimes(1)
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Задачи' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Открыть запись календаря' }))
+    const dialog = await screen.findByRole('dialog', { name: 'День рождения' })
+    expect(await within(dialog).findByText('Поздравить')).toBeInTheDocument()
+    expect(getBirthday).toHaveBeenCalledWith(source.id, expect.any(AbortSignal))
+  })
+
+  it('creates birthdays from the calendar and refreshes their appearances', async () => {
+    const source = { id: 'new-birthday', name: 'Лена', month: 10, day: 1, birthYear: null, note: '', createdAt: task.createdAt, updatedAt: task.updatedAt }
+    vi.mocked(saveBirthday).mockResolvedValue(source)
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ items: [] })))
+    renderDashboard(undefined, '/app?view=month&date=2026-10-01')
+    fireEvent.click(screen.getByRole('button', { name: 'Показать диапазон' }))
+    await waitFor(() => expect(listBirthdayOccurrences).toHaveBeenCalledTimes(1))
+    fireEvent.click(screen.getByRole('button', { name: 'Добавить запись' }))
+    fireEvent.click(screen.getByRole('button', { name: 'День рождения' }))
+    expect(screen.getByLabelText('День')).toHaveValue(1)
+    expect(screen.getByLabelText('Месяц')).toHaveValue('10')
+    fireEvent.change(screen.getByLabelText('Имя'), { target: { value: source.name } })
+    vi.mocked(listBirthdayOccurrences).mockResolvedValue({ items: [{ birthdayId: source.id, name: source.name, date: '2026-10-01', age: null }] })
+    fireEvent.click(screen.getByRole('button', { name: 'Создать день рождения' }))
+    await waitFor(() => expect(saveBirthday).toHaveBeenCalledOnce())
+    await waitFor(() => expect(listBirthdayOccurrences).toHaveBeenCalledTimes(2))
+    expect(await screen.findByText(/День рождения «Лена» сохранён/)).toBeInTheDocument()
+    expect(screen.getByTestId('calendar-task-count')).toHaveTextContent('1')
+  })
+
+  it('uses server preferences for week start and all calendar time labels', () => {
+    vi.stubGlobal('fetch', vi.fn())
+    render(<MemoryRouter initialEntries={['/app']}><CalendarPreferencesContext.Provider value={{ timeFormat: '12h', weekStartsOn: 'sunday' }}><TaskCalendarDashboard timeZone="UTC" csrfToken="csrf" onAuthenticationRequired={vi.fn()} /></CalendarPreferencesContext.Provider></MemoryRouter>)
+    expect(calendarHarness.props?.firstDay).toBe(0)
+    expect(calendarHarness.props?.eventTimeFormat.hour12).toBe(true)
+    expect(calendarHarness.props?.slotHeaderFormat.hour12).toBe(true)
+  })
+
 })
+
+vi.mock('../recurrence/useOccurrences',()=>({useOccurrences:()=>({items:[],status:'loaded',limited:false,refresh:vi.fn()})}))

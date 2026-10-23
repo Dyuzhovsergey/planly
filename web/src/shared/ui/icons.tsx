@@ -113,3 +113,15 @@ export function DragHandleIcon({ className = 'size-5' }: IconProps) {
     </svg>
   )
 }
+
+export function EventIcon({ className = 'size-5' }: IconProps) {
+  return <svg {...common} className={className}><rect x="3" y="5" width="18" height="16" rx="3" /><path d="M7 3v4m10-4v4M3 10h18m-9 3v3l2 1" /></svg>
+}
+
+export function BirthdayIcon({ className = 'size-5' }: IconProps) {
+  return <svg {...common} className={className}><path d="M4 12h16v8H4zM3 8h18v4H3zM12 8v12M12 8H8a3 3 0 1 1 3-3l1 3Zm0 0h4a3 3 0 1 0-3-3l-1 3Z" /></svg>
+}
+
+export function SettingsIcon({ className = 'size-5' }: IconProps) {
+  return <svg {...common} className={className}><path d="m9 3-1 3-3 1v4l2 1-1 3 3 3 3-1 2 2 3-2v-3l3-2-1-4-3-1-1-3Z" /><circle cx="12" cy="11" r="3" /></svg>
+}

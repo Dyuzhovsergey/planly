@@ -10,6 +10,7 @@ interface TaskCreateDialogProps {
   fallbackFocusRef: RefObject<HTMLElement | null>
   onAuthenticationRequired: () => void
   onCancel: () => void
+  onSeriesCreated?: (series: import('../recurrence/types').Series) => void
   onTaskCreated: (task: Task) => void
 }
 
@@ -22,6 +23,7 @@ export function TaskCreateDialog({
   onAuthenticationRequired,
   onCancel,
   onTaskCreated,
+  onSeriesCreated,
 }: TaskCreateDialogProps) {
   const dialogRef = useRef<HTMLDivElement>(null)
 
@@ -79,7 +81,7 @@ export function TaskCreateDialog({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/50 p-4 sm:p-6"
+      className="planly-dialog-backdrop fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/50 p-4 sm:p-6"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget && !isSubmitting()) {
           onCancel()
@@ -88,7 +90,7 @@ export function TaskCreateDialog({
     >
       <div
         ref={dialogRef}
-        className="planly-card my-auto max-h-[calc(100dvh-2rem)] w-full max-w-xl overflow-y-auto p-5 sm:max-h-[calc(100dvh-3rem)] sm:p-6"
+        className="planly-dialog-panel planly-card my-auto max-h-[calc(100dvh-2rem)] w-full max-w-xl overflow-y-auto p-5 sm:max-h-[calc(100dvh-3rem)] sm:p-6"
         id="task-create-dialog"
         role="dialog"
         aria-modal="true"
@@ -103,6 +105,7 @@ export function TaskCreateDialog({
           onAuthenticationRequired={onAuthenticationRequired}
           onCancel={onCancel}
           onTaskCreated={onTaskCreated}
+          onSeriesCreated={onSeriesCreated}
         />
       </div>
     </div>,

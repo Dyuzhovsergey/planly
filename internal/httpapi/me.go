@@ -7,7 +7,10 @@ import (
 )
 
 type updateMeRequest struct {
-	TimeZone string `json:"timeZone"`
+	TimeZone     optionalField[string] `json:"timeZone"`
+	DisplayName  optionalField[string] `json:"displayName"`
+	WeekStartsOn optionalField[string] `json:"weekStartsOn"`
+	TimeFormat   optionalField[string] `json:"timeFormat"`
 }
 
 func (handler *authHandler) me(response http.ResponseWriter, request *http.Request) {
@@ -30,14 +33,14 @@ func (handler *authHandler) updateMe(response http.ResponseWriter, request *http
 		return
 	}
 
-	var body updateMeRequest
+	var body optionalField[updateMeRequest]
 	if err := decodeJSON(response, request, &body); err != nil {
 		writeProblem(response, http.StatusBadRequest, "invalid_request")
 		return
 	}
 
-	user, err := handler.service.UpdateTimeZone(request.Context(), identity.User.ID, auth.UpdateTimeZoneInput{
-		TimeZone: body.TimeZone,
+	user, err := handler.service.UpdateProfile(request.Context(), identity.User.ID, auth.ProfileUpdate{
+		TimeZone: profileField(&body.value.TimeZone), DisplayName: profileField(&body.value.DisplayName), WeekStartsOn: profileField(&body.value.WeekStartsOn), TimeFormat: profileField(&body.value.TimeFormat),
 	})
 	if err != nil {
 		handler.writeAuthError(response, err)
@@ -48,4 +51,11 @@ func (handler *authHandler) updateMe(response http.ResponseWriter, request *http
 		User:      makeUserResponse(user),
 		CSRFToken: identity.CSRFToken,
 	})
+}
+
+func profileField(field *optionalField[string]) *string {
+	if !field.set {
+		return nil
+	}
+	return &field.value
 }

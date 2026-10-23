@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, useLocation } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -550,4 +550,95 @@ describe('session restoration', () => {
     expect(await screen.findByRole('button', { name: 'Войти' })).toBeInTheDocument()
     await expectLocation('/login')
   })
+})
+
+
+it('saves settings via me, updates the profile and restores them after refresh', async () => {
+  let current = { ...authEnvelope.user, displayName: '', weekStartsOn: 'monday', timeFormat: '24h' }
+  const fetchMock = vi.fn(async (_path: string, init?: RequestInit) => {
+    if (init?.method === 'PATCH') current = { ...current, ...JSON.parse(init.body as string) }
+    return jsonResponse({ ...authEnvelope, user: current })
+  })
+  vi.stubGlobal('fetch', fetchMock)
+  renderApplication('/settings'); await screen.findByLabelText('Отображаемое имя')
+  fireEvent.change(screen.getByLabelText('Отображаемое имя'), { target: { value: 'Новое имя' } }); fireEvent.click(screen.getByRole('button', { name: 'Сохранить настройки' }))
+  await screen.findByText('Настройки сохранены.'); expect(screen.getByText('Новое имя')).toBeInTheDocument()
+  const [, init] = fetchMock.mock.calls.find(([, value]) => value?.method === 'PATCH')!
+  expect(JSON.parse(init!.body as string)).toEqual({ displayName: 'Новое имя' })
+  expect(new Headers(init!.headers).get('X-CSRF-Token')).toBe(authEnvelope.csrfToken); expect(init?.credentials).toBe('include')
+  cleanup(); renderApplication('/settings'); expect(await screen.findByLabelText('Отображаемое имя')).toHaveValue('Новое имя')
+  fireEvent.change(screen.getByLabelText('Отображаемое имя'), { target: { value: '' } }); fireEvent.click(screen.getByRole('button', { name: 'Сохранить настройки' }))
+  await screen.findByText('Настройки сохранены.'); expect(screen.getAllByRole('link', { name: 'Настройки профиля' })[0]).toHaveTextContent(authEnvelope.user.username)
+})
+
+it('does not restore a logged-out account when an earlier settings request finishes late', async () => {
+  let resolve!: (response: Response) => void
+  const pending = new Promise<Response>((yes) => { resolve = yes })
+  vi.stubGlobal('fetch', vi.fn(async (path: string, init?: RequestInit) => {
+    if (init?.method === 'PATCH') return pending
+    if (path.endsWith('/auth/logout')) return new Response(null, { status: 204 })
+    return jsonResponse(authEnvelope)
+  }))
+  renderApplication('/settings'); await screen.findByLabelText('Отображаемое имя')
+  fireEvent.change(screen.getByLabelText('Отображаемое имя'), { target: { value: 'Поздний ответ' } }); fireEvent.click(screen.getByRole('button', { name: 'Сохранить настройки' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Выйти' }))
+  await expectLocation('/login')
+  resolve(jsonResponse({ ...authEnvelope, user: { ...authEnvelope.user, displayName: 'Поздний ответ' } }))
+  await waitFor(() => expect(screen.getByTestId('current-location')).toHaveTextContent('/login'))
+  expect(screen.queryByText('Поздний ответ')).not.toBeInTheDocument()
+})
+
+
+it('closes unchanged settings to the calendar without saving, including direct entry', async () => {
+  const fetchMock = vi.fn().mockResolvedValue(jsonResponse(authEnvelope))
+  vi.stubGlobal('fetch', fetchMock)
+  renderApplication('/settings')
+  await screen.findByLabelText('Отображаемое имя')
+  expect(screen.getByRole('button', { name: 'Сохранить настройки' })).toBeDisabled()
+  const close = screen.getByRole('button', { name: 'Закрыть настройки' })
+  expect(close).toBeEnabled()
+  close.focus()
+  expect(close).toHaveFocus()
+  fireEvent.click(close)
+  await expectLocation('/app')
+  expect(screen.queryByLabelText('Отображаемое имя')).not.toBeInTheDocument()
+  expect(fetchMock).toHaveBeenCalledTimes(1)
+})
+
+
+it('places settings after birthdays in desktop and mobile navigation', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(authEnvelope)))
+  renderApplication('/settings')
+  await screen.findByLabelText('Отображаемое имя')
+  for (const navigation of screen.getAllByRole('navigation', { name: 'Разделы приложения' })) {
+    const links = within(navigation).getAllByRole('link')
+    expect(links.map((link) => link.textContent)).toEqual(['Календарь', 'Задачи', 'Мероприятия', 'Дни рождения', 'Настройки'])
+    expect(links[4]).toHaveAttribute('href', '/settings')
+    expect(links[4]).toHaveAttribute('aria-current', 'page')
+  }
+})
+
+it('saves a preset with CSRF, refreshes the user and updates the account image', async () => {
+ let current = { ...authEnvelope.user, avatarUrl: '' }
+ const fetchMock = vi.fn(async (path: string, init?: RequestInit) => {
+  if (path.endsWith('/me/avatar') && init?.method === 'PUT') {
+   current = { ...current, avatarUrl: '/api/v1/me/avatar?v=preset-2' }
+   return new Response(null, { status: 204 })
+  }
+  return jsonResponse({ ...authEnvelope, user: current })
+ })
+ vi.stubGlobal('fetch', fetchMock)
+ renderApplication('/settings')
+ await screen.findByLabelText('Отображаемое имя')
+ fireEvent.click(screen.getByRole('button', { name: 'Сиреневый фон, борода' }))
+ fireEvent.click(screen.getByRole('button', { name: 'Сохранить фото' }))
+ await screen.findByText('Фото профиля обновлено.')
+ const [, init] = fetchMock.mock.calls.find(([, init]) => init?.method === 'PUT')!
+ expect(JSON.parse(init!.body as string)).toEqual({ presetId: 'preset-2' })
+ expect(new Headers(init!.headers).get('X-CSRF-Token')).toBe(authEnvelope.csrfToken)
+ expect(init!.credentials).toBe('include')
+ expect(screen.getAllByRole('link', { name: 'Настройки профиля' })[0].querySelector('img')).toHaveAttribute('src', current.avatarUrl)
+ cleanup(); renderApplication('/settings')
+ await screen.findByLabelText('Отображаемое имя')
+ expect(screen.getAllByRole('link', { name: 'Настройки профиля' })[0].querySelector('img')).toHaveAttribute('src', current.avatarUrl)
 })

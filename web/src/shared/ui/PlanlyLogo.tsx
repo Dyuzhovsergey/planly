@@ -15,7 +15,7 @@ export function PlanlyLogo({ compact = false, showTagline = false }: PlanlyLogoP
         width={compact ? 64 : 72}
       />
       <div>
-        <p className={compact ? 'font-bold tracking-tight' : 'text-lg font-bold tracking-tight'}>Planly</p>
+        <p className={compact ? 'font-extrabold tracking-[0.06em]' : 'text-lg font-extrabold tracking-[0.06em]'}>PLANLY</p>
         {showTagline && <p className="text-xs text-[var(--color-muted)]">Ваш день в порядке</p>}
       </div>
     </div>

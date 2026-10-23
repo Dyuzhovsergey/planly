@@ -490,3 +490,5 @@ describe('TaskListPage', () => {
     await waitFor(() => expect(onAuthenticationRequired).toHaveBeenCalledOnce())
   })
 })
+
+vi.mock('../recurrence/useOccurrences',()=>({useOccurrences:()=>({items:[],status:'loaded',limited:false,refresh:vi.fn()})}))

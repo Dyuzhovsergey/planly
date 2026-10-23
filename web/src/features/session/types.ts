@@ -1,8 +1,14 @@
+import type { TimeFormat, WeekStartsOn } from '../../shared/calendar/preferences'
+
 export interface User {
   id: string
   username: string
   email: string
   timeZone: string
+  avatarUrl?: string
+  displayName?: string
+  weekStartsOn?: WeekStartsOn
+  timeFormat?: TimeFormat
   createdAt: string
 }
 

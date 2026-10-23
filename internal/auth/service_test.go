@@ -10,6 +10,7 @@ import (
 )
 
 type fakeRepository struct {
+	profile            ProfileUpdate
 	user               User
 	session            Session
 	sessionUser        SessionUser
@@ -67,6 +68,15 @@ func (repository *fakeRepository) UpdateSessionCSRF(_ context.Context, _ []byte,
 func (repository *fakeRepository) UpdateUserTimeZone(_ context.Context, userID, timeZone string) (User, error) {
 	repository.updatedUserID = userID
 	repository.updatedTimeZone = timeZone
+	return repository.updatedUser, repository.updateTimeZoneErr
+}
+
+func (repository *fakeRepository) UpdateUserProfile(_ context.Context, userID string, params ProfileUpdate) (User, error) {
+	repository.updatedUserID = userID
+	repository.profile = params
+	if params.TimeZone != nil {
+		repository.updatedTimeZone = *params.TimeZone
+	}
 	return repository.updatedUser, repository.updateTimeZoneErr
 }
 

@@ -27,3 +27,16 @@ export function logoutUser(csrfToken: string): Promise<void> {
     headers: { 'X-CSRF-Token': csrfToken },
   })
 }
+
+export function updateCurrentUser(input: import('../settings/profile').ProfileUpdate, csrfToken: string): Promise<AuthEnvelope> {
+  return request<AuthEnvelope>('/me', { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken }, body: JSON.stringify(input) })
+}
+
+export async function updateAvatar(change: import('../settings/avatar').AvatarChange, csrfToken: string): Promise<AuthEnvelope> {
+  const headers = new Headers({ 'X-CSRF-Token': csrfToken })
+  let body: BodyInit | undefined
+  if (change.type === 'preset') { headers.set('Content-Type', 'application/json'); body = JSON.stringify({ presetId: change.presetId }) }
+  if (change.type === 'upload') { headers.set('Content-Type', change.file.type); body = change.file }
+  await request<void>('/me/avatar', { method: change.type === 'delete' ? 'DELETE' : 'PUT', headers, body })
+  return getCurrentUser()
+}

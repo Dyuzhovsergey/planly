@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 const (
@@ -194,21 +195,53 @@ func (service *Service) Authenticate(ctx context.Context, sessionToken string) (
 
 // UpdateTimeZone validates and persists the current user's calendar time zone.
 func (service *Service) UpdateTimeZone(ctx context.Context, userID string, input UpdateTimeZoneInput) (User, error) {
-	timeZone := strings.TrimSpace(input.TimeZone)
-	if !isValidTimeZone(timeZone) {
-		return User{}, &ValidationError{Fields: map[string][]string{
-			"timeZone": {"must be a valid IANA time zone"},
-		}}
-	}
+	return service.UpdateProfile(ctx, userID, ProfileUpdate{TimeZone: &input.TimeZone})
+}
 
-	user, err := service.repository.UpdateUserTimeZone(ctx, userID, timeZone)
+// UpdateProfile validates every supplied preference before one owner-scoped update.
+// It neither replaces the session nor modifies calendar records.
+func (service *Service) UpdateProfile(ctx context.Context, userID string, input ProfileUpdate) (User, error) {
+	fields := make(map[string][]string)
+	params := ProfileUpdate{}
+	if input.DisplayName != nil {
+		value := strings.TrimSpace(*input.DisplayName)
+		if !utf8.ValidString(value) || utf8.RuneCountInString(value) > 100 || strings.ContainsRune(value, 0) {
+			fields["displayName"] = []string{"must contain at most 100 characters without NUL"}
+		}
+		params.DisplayName = &value
+	}
+	if input.TimeZone != nil {
+		value := strings.TrimSpace(*input.TimeZone)
+		if !isValidTimeZone(value) {
+			fields["timeZone"] = []string{"must be a valid IANA time zone"}
+		}
+		params.TimeZone = &value
+	}
+	if input.WeekStartsOn != nil {
+		value := *input.WeekStartsOn
+		if value != "monday" && value != "sunday" {
+			fields["weekStartsOn"] = []string{"must be monday or sunday"}
+		}
+		params.WeekStartsOn = &value
+	}
+	if input.TimeFormat != nil {
+		value := *input.TimeFormat
+		if value != "12h" && value != "24h" {
+			fields["timeFormat"] = []string{"must be 12h or 24h"}
+		}
+		params.TimeFormat = &value
+	}
+	if input.DisplayName == nil && input.TimeZone == nil && input.WeekStartsOn == nil && input.TimeFormat == nil {
+		fields["body"] = []string{"must contain at least one editable field"}
+	}
+	if len(fields) > 0 {
+		return User{}, &ValidationError{Fields: fields}
+	}
+	user, err := service.repository.UpdateUserProfile(ctx, userID, params)
 	if errors.Is(err, ErrNotFound) {
 		return User{}, ErrUnauthenticated
 	}
-	if err != nil {
-		return User{}, err
-	}
-	return user, nil
+	return user, err
 }
 
 func (service *Service) createSession(userID string) (Session, string, string, error) {
@@ -261,6 +294,9 @@ func validateRegistration(username, email, password, timeZone string) *Validatio
 }
 
 func isValidTimeZone(timeZone string) bool {
+	if timeZone == "" || timeZone == "Local" {
+		return false
+	}
 	_, err := time.LoadLocation(timeZone)
 	return err == nil
 }

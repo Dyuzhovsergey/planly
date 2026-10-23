@@ -24,7 +24,7 @@ type AuthService interface {
 	Login(context.Context, auth.LoginInput) (auth.AuthResult, error)
 	Logout(context.Context, string, string) error
 	Authenticate(context.Context, string) (auth.SessionIdentity, error)
-	UpdateTimeZone(context.Context, string, auth.UpdateTimeZoneInput) (auth.User, error)
+	UpdateProfile(context.Context, string, auth.ProfileUpdate) (auth.User, error)
 }
 
 // AuthConfig contains browser-facing authentication settings.
@@ -58,11 +58,15 @@ type authResponse struct {
 }
 
 type userResponse struct {
-	ID        string    `json:"id"`
-	Username  string    `json:"username"`
-	Email     string    `json:"email"`
-	TimeZone  string    `json:"timeZone"`
-	CreatedAt time.Time `json:"createdAt"`
+	AvatarURL    string    `json:"avatarUrl"`
+	ID           string    `json:"id"`
+	Username     string    `json:"username"`
+	Email        string    `json:"email"`
+	TimeZone     string    `json:"timeZone"`
+	DisplayName  string    `json:"displayName"`
+	WeekStartsOn string    `json:"weekStartsOn"`
+	TimeFormat   string    `json:"timeFormat"`
+	CreatedAt    time.Time `json:"createdAt"`
 }
 
 func newAuthHandler(service AuthService, config AuthConfig) *authHandler {
@@ -223,11 +227,17 @@ func makeAuthResponse(result auth.AuthResult) authResponse {
 }
 
 func makeUserResponse(user auth.User) userResponse {
+	avatarURL := ""
+	if user.AvatarKey != "" {
+		avatarURL = "/api/v1/me/avatar?v=" + user.AvatarKey
+	}
 	return userResponse{
-		ID:        user.ID,
-		Username:  user.Username,
-		Email:     user.Email,
-		TimeZone:  user.TimeZone,
+		AvatarURL:   avatarURL,
+		ID:          user.ID,
+		Username:    user.Username,
+		Email:       user.Email,
+		TimeZone:    user.TimeZone,
+		DisplayName: user.DisplayName, WeekStartsOn: user.WeekStartsOn, TimeFormat: user.TimeFormat,
 		CreatedAt: user.CreatedAt.UTC(),
 	}
 }

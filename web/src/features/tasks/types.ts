@@ -11,6 +11,7 @@ export interface AllDayTaskSchedule {
 export type TaskSchedule = TimedTaskSchedule | AllDayTaskSchedule
 
 export interface Task {
+  recurrence?: import('../recurrence/types').Occurrence
   id: string
   title: string
   description: string

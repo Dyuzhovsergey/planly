@@ -1,8 +1,13 @@
+import { createSeries } from '../recurrence/api'
+import { RuleFields } from '../recurrence/RuleFields'
+import { ruleDraft, validateRule } from '../recurrence/rule'
+import type { Series } from '../recurrence/types'
+import { useCalendarPreferences } from '../../shared/calendar/preferences'
 import { type FormEvent, useEffect, useRef, useState } from 'react'
 
 import { ApiError } from '../../shared/api/client'
 import { createTask } from './api'
-import { formatTaskSchedule, localDateTimeToRFC3339 } from './date-time'
+import { formatTaskSchedule, zonedDateTimeToRFC3339 } from './date-time'
 import type { CreateTaskInput, Task, TaskSchedule } from './types'
 
 interface TaskCreateFormProps {
@@ -12,6 +17,7 @@ interface TaskCreateFormProps {
   timeZone: string
   onAuthenticationRequired: () => void
   onCancel?: () => void
+  onSeriesCreated?: (series: Series) => void
   onTaskCreated: (task: Task) => void
 }
 
@@ -32,7 +38,15 @@ export function TaskCreateForm({
   onAuthenticationRequired,
   onCancel,
   onTaskCreated,
+  onSeriesCreated,
 }: TaskCreateFormProps) {
+  const { timeFormat } = useCalendarPreferences()
+
+  const submitBusy=useRef(false)
+  const [repeating,setRepeating]=useState(false)
+  const [rule,setRule]=useState(()=>ruleDraft(timeZone))
+  const [ruleErrors,setRuleErrors]=useState<Record<string,string>>({})
+  const [seriesCreated,setSeriesCreated]=useState(false)
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [scheduleType, setScheduleType] = useState<ScheduleType>('timed')
@@ -79,7 +93,7 @@ export function TaskCreateForm({
 
     let schedule: TaskSchedule | undefined
     if (scheduleType === 'timed') {
-      const at = localDateTimeToRFC3339(scheduledAt)
+      const at = zonedDateTimeToRFC3339(scheduledAt, repeating ? rule.zone.trim() : timeZone)
       if (!at) {
         errors.scheduledAt = 'Укажите корректные дату и время.'
       } else {
@@ -102,10 +116,11 @@ export function TaskCreateForm({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (isSubmitting) {
+    if (isSubmitting || submitBusy.current) {
       return
     }
 
+    setRuleErrors({});setSeriesCreated(false)
     setFieldErrors({})
     setFormError(null)
     setCreatedTask(null)
@@ -124,8 +139,17 @@ export function TaskCreateForm({
       return
     }
 
+    const recurrence = repeating ? validateRule(rule,input.schedule) : null
+    if (recurrence && !recurrence.rule) { setRuleErrors(recurrence.errors); return }
+    submitBusy.current=true
     setIsSubmitting(true)
     try {
+      if(repeating && recurrence?.rule){
+        const created=await createSeries('task',{...input,recurrence:recurrence.rule},csrfToken)
+        setSeriesCreated(true);onSeriesCreated?.(created)
+        setTitle('');setDescription('');setScheduledAt('');setScheduledDate('');setFieldToFocus('title')
+        return
+      }
       const created = await createTask(input, csrfToken)
       setCreatedTask(created)
       onTaskCreated(created)
@@ -144,6 +168,7 @@ export function TaskCreateForm({
         error.problem?.code === 'validation_failed'
       ) {
         const apiErrors = error.problem.errors ?? {}
+        setRuleErrors(Object.fromEntries(Object.keys(apiErrors).filter(key=>key.startsWith('recurrence.')).map(key=>[key,'Проверьте значение поля.'])))
         const nextErrors: FieldErrors = {
           title: apiErrors.title?.[0],
           description: apiErrors.description?.[0],
@@ -168,10 +193,11 @@ export function TaskCreateForm({
         )
       } else {
         setFormError(
-          'Не удалось создать задачу. Проверьте соединение и повторите попытку.',
+          repeating ? 'Не удалось подтвердить создание серии. Черновик сохранён. Проверьте календарь перед повторной отправкой, чтобы не создать дубль.' : 'Не удалось создать задачу. Проверьте соединение и повторите попытку.',
         )
       }
     } finally {
+      submitBusy.current=false
       setIsSubmitting(false)
     }
   }
@@ -179,7 +205,7 @@ export function TaskCreateForm({
   const inputClassName = 'planly-input mt-2'
 
   return (
-    <section className={compact ? 'mt-2' : 'mt-6 border-t border-slate-200 pt-6'} aria-labelledby="task-create-title">
+    <section className={compact ? 'mt-2' : 'mt-6 border-t border-[var(--color-border)] pt-6'} aria-labelledby="task-create-title">
       <h2 className={`${compact ? 'text-lg' : 'text-xl'} font-semibold text-[var(--color-ink)]`} id="task-create-title">
         Новая задача
       </h2>
@@ -190,7 +216,7 @@ export function TaskCreateForm({
         aria-busy={isSubmitting}
       >
         <div>
-          <label className="block text-sm font-medium text-slate-800" htmlFor="task-title">
+          <label className="block text-sm font-medium text-[var(--color-ink)]" htmlFor="task-title">
             Название
           </label>
           <input
@@ -208,7 +234,7 @@ export function TaskCreateForm({
             onChange={(event) => setTitle(event.target.value)}
           />
           {fieldErrors.title && (
-            <p className="mt-2 text-sm text-red-700" id="task-title-error" role="alert">
+            <p className="mt-2 text-sm text-[var(--color-danger)]" id="task-title-error" role="alert">
               {fieldErrors.title}
             </p>
           )}
@@ -216,10 +242,10 @@ export function TaskCreateForm({
 
         <div>
           <label
-            className="block text-sm font-medium text-slate-800"
+            className="block text-sm font-medium text-[var(--color-ink)]"
             htmlFor="task-description"
           >
-            Описание <span className="font-normal text-slate-500">(необязательно)</span>
+            Описание <span className="font-normal text-[var(--color-muted)]">(необязательно)</span>
           </label>
           <textarea
             ref={descriptionInput}
@@ -236,7 +262,7 @@ export function TaskCreateForm({
           />
           {fieldErrors.description && (
             <p
-              className="mt-2 text-sm text-red-700"
+              className="mt-2 text-sm text-[var(--color-danger)]"
               id="task-description-error"
               role="alert"
             >
@@ -246,7 +272,7 @@ export function TaskCreateForm({
         </div>
 
         <fieldset>
-          <legend className="text-sm font-medium text-slate-800">Расписание</legend>
+          <legend className="text-sm font-medium text-[var(--color-ink)]">Расписание</legend>
           <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
             <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl border border-[var(--color-border)] px-3 py-2 text-sm font-medium text-[var(--color-ink)] has-[:checked]:border-[var(--color-accent)] has-[:checked]:bg-[var(--color-accent-soft)]">
               <input
@@ -288,7 +314,7 @@ export function TaskCreateForm({
         {scheduleType === 'timed' ? (
           <div>
             <label
-              className="block text-sm font-medium text-slate-800"
+              className="block text-sm font-medium text-[var(--color-ink)]"
               htmlFor="task-scheduled-at"
             >
               Дата и время
@@ -305,13 +331,14 @@ export function TaskCreateForm({
               value={scheduledAt}
               aria-invalid={Boolean(fieldErrors.scheduledAt)}
               aria-describedby={
-                fieldErrors.scheduledAt ? 'task-scheduled-at-error' : undefined
+                `task-zone-hint${fieldErrors.scheduledAt ? ' task-scheduled-at-error' : ''}`
               }
               onChange={(event) => setScheduledAt(event.target.value)}
             />
+            <p id="task-zone-hint" className="mt-2 text-xs text-[var(--color-muted)]">Время в зоне {repeating ? rule.zone.trim() : timeZone}. При повторе времени выбирается первое вхождение.</p>
             {fieldErrors.scheduledAt && (
               <p
-                className="mt-2 text-sm text-red-700"
+                className="mt-2 text-sm text-[var(--color-danger)]"
                 id="task-scheduled-at-error"
                 role="alert"
               >
@@ -322,7 +349,7 @@ export function TaskCreateForm({
         ) : (
           <div>
             <label
-              className="block text-sm font-medium text-slate-800"
+              className="block text-sm font-medium text-[var(--color-ink)]"
               htmlFor="task-scheduled-date"
             >
               Дата
@@ -344,7 +371,7 @@ export function TaskCreateForm({
             />
             {fieldErrors.scheduledDate && (
               <p
-                className="mt-2 text-sm text-red-700"
+                className="mt-2 text-sm text-[var(--color-danger)]"
                 id="task-scheduled-date-error"
                 role="alert"
               >
@@ -354,18 +381,21 @@ export function TaskCreateForm({
           </div>
         )}
 
+        <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm font-medium"><input type="checkbox" checked={repeating} disabled={isSubmitting} onChange={e=>{setRepeating(e.target.checked);setRuleErrors({})}}/>Повторять</label>
+        {repeating && <RuleFields value={rule} onChange={setRule} timed={scheduleType==='timed'} anchor={scheduleType==='timed'?scheduledAt:scheduledDate} errors={ruleErrors} disabled={isSubmitting}/>}
+        {seriesCreated && <p role="status" className="text-sm text-[var(--color-accent-strong)]">Серия задач создана.</p>}
         {formError && (
-          <p className="rounded-lg bg-red-50 p-3 text-sm text-red-800" role="alert">
+          <p className="rounded-lg bg-[var(--color-danger-soft)] p-3 text-sm text-[var(--color-danger)]" role="alert">
             {formError}
           </p>
         )}
 
         {createdTask && (
-          <div className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-900" role="status">
+          <div className="rounded-lg bg-[var(--color-success-soft)] p-3 text-sm text-[var(--color-success)]" role="status">
             <p className="font-medium">Задача создана</p>
             <p className="mt-1">{createdTask.title}</p>
-            <p className="mt-1 text-emerald-800">
-              {formatTaskSchedule(createdTask.schedule, timeZone)}
+            <p className="mt-1 text-[var(--color-success)]">
+              {formatTaskSchedule(createdTask.schedule, timeZone, timeFormat)}
             </p>
           </div>
         )}
@@ -376,7 +406,7 @@ export function TaskCreateForm({
             type="submit"
             disabled={isSubmitting}
           >
-            {isSubmitting ? 'Создаём задачу…' : 'Создать задачу'}
+            {isSubmitting ? 'Создаём задачу…' : repeating ? 'Создать серию задач' : 'Создать задачу'}
           </button>
           {onCancel && (
             <button

@@ -1,3 +1,4 @@
+import { useCalendarPreferences } from '../../shared/calendar/preferences'
 import { useState, type DragEvent } from 'react'
 
 import {
@@ -61,6 +62,8 @@ export function TaskBoard({
   onTaskUpdated,
   onDeleteTask,
 }: TaskBoardProps) {
+  const { timeFormat } = useCalendarPreferences()
+
   const [draggedTaskID, setDraggedTaskID] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<BoardStatus | null>(null)
   const visibleColumns = statusFilter === 'all'
@@ -140,7 +143,7 @@ export function TaskBoard({
                     <p className="mt-0.5 text-xs leading-5 text-[var(--color-muted)]">{column.description}</p>
                   </div>
                 </div>
-                <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-[var(--color-muted)] shadow-sm" aria-label={`${columnTasks.length} задач`}>
+                <span className="rounded-full bg-[var(--color-surface)] px-2.5 py-1 text-xs font-semibold text-[var(--color-muted)] shadow-sm" aria-label={`${columnTasks.length} задач`}>
                   {columnTasks.length}
                 </span>
               </header>
@@ -196,10 +199,10 @@ export function TaskBoard({
 
                       <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-[var(--color-muted)]">
                         <span className="rounded-full bg-[var(--color-surface-muted)] px-2.5 py-1">
-                          {formatTaskSchedule(task.schedule, timeZone)}
+                          {formatTaskSchedule(task.schedule, timeZone, timeFormat)}
                         </span>
                         <span className="rounded-full border border-[var(--color-border)] px-2.5 py-1">
-                          {task.schedule.type === 'allDay' ? 'Весь день' : 'Дата и время'}
+                          {task.recurrence ? 'Повторение' : task.schedule.type === 'allDay' ? 'Весь день' : 'Дата и время'}
                         </span>
                       </div>
 

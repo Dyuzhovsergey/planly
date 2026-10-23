@@ -59,6 +59,7 @@ describe('TaskCompletionControl', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Завершить задачу Позвонить врачу' }))
 
     await waitFor(() => expect(onUpdated).toHaveBeenCalledWith(updated))
+    expect(document.querySelector('[data-completion-feedback]')).toBeInTheDocument()
     const [path, init] = fetchMock.mock.calls[0]
     expect(path).toBe(`/api/v1/tasks/${task.id}`)
     expect(init.method).toBe('PATCH')
@@ -100,6 +101,7 @@ describe('TaskCompletionControl', () => {
     expect(fetchMock).toHaveBeenCalledOnce()
     expect(button).toBeDisabled()
     expect(button).toHaveTextContent('Сохраняем')
+    expect(document.querySelector('[data-completion-feedback]')).not.toBeInTheDocument()
     resolveResponse(jsonResponse({ ...task, completed: true }))
     await waitFor(() => expect(button).not.toBeDisabled())
   })
@@ -113,6 +115,7 @@ describe('TaskCompletionControl', () => {
 
     await waitFor(() => expect(onAuthenticationRequired).toHaveBeenCalledOnce())
     expect(onUpdated).not.toHaveBeenCalled()
+    expect(document.querySelector('[data-completion-feedback]')).not.toBeInTheDocument()
   })
 
   it.each([
@@ -127,5 +130,6 @@ describe('TaskCompletionControl', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(message)
     expect(screen.getByRole('button', { name: 'Завершить задачу Позвонить врачу' })).toBeEnabled()
     expect(onUpdated).not.toHaveBeenCalled()
+    expect(document.querySelector('[data-completion-feedback]')).not.toBeInTheDocument()
   })
 })

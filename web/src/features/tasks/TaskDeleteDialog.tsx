@@ -109,14 +109,14 @@ export function TaskDeleteDialog({
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" onMouseDown={(event) => {
+    <div className="planly-dialog-backdrop fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" onMouseDown={(event) => {
       if (event.target === event.currentTarget && !isSubmitting) {
         onCancel()
       }
     }}>
       <div
         ref={dialogRef}
-        className="planly-card w-full max-w-md p-6"
+        className="planly-dialog-panel planly-card w-full max-w-md p-6"
         role="alertdialog"
         aria-modal="true"
         aria-labelledby={titleID}

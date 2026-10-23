@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { TaskCreateForm } from './TaskCreateForm'
-import { localDateTimeToRFC3339 } from './date-time'
+import { zonedDateTimeToRFC3339 } from './date-time'
 
 const timedTask = {
   id: 'task-id',
@@ -109,7 +109,7 @@ describe('TaskCreateForm', () => {
       description: 'Уточнить время приёма',
       schedule: {
         type: 'timed',
-        at: localDateTimeToRFC3339('2026-10-20T18:30'),
+        at: zonedDateTimeToRFC3339('2026-10-20T18:30', 'Europe/Moscow'),
       },
     })
     expect(init.body as string).not.toContain('userId')

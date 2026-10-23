@@ -67,3 +67,9 @@ describe('calendar rescheduling values', () => {
     )).toBe('2026-10-25')
   })
 })
+
+it('rejects nonexistent account-zone times and resolves a DST fold to its first instant', () => {
+  expect(zonedDateTimeToRFC3339('2026-03-29T02:30', 'Europe/Berlin')).toBeNull()
+  expect(zonedDateTimeToRFC3339('2026-10-25T02:30', 'Europe/Berlin')).toBe('2026-10-25T00:30:00Z')
+  expect(zonedDateTimeToRFC3339('0001-01-01T00:00', 'Asia/Tokyo')).toBeNull()
+})

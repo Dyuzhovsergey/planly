@@ -10,6 +10,7 @@ interface TaskEditFormProps {
   timeZone: string
   csrfToken: string
   onAuthenticationRequired: () => void
+  onBusyChange?: (busy: boolean) => void
   onCancel: () => void
   onUpdated: (task: Task) => void
 }
@@ -27,6 +28,7 @@ export function TaskEditForm({
   timeZone,
   csrfToken,
   onAuthenticationRequired,
+  onBusyChange,
   onCancel,
   onUpdated,
 }: TaskEditFormProps) {
@@ -130,6 +132,7 @@ export function TaskEditForm({
     }
 
     setIsSubmitting(true)
+    onBusyChange?.(true)
     try {
       onUpdated(await updateTask(task.id, input, csrfToken))
     } catch (caught: unknown) {
@@ -169,6 +172,7 @@ export function TaskEditForm({
       }
     } finally {
       setIsSubmitting(false)
+      onBusyChange?.(false)
     }
   }
 
@@ -191,6 +195,7 @@ export function TaskEditForm({
           </label>
           <input
             ref={titleInputRef}
+            data-autofocus
             className="planly-input mt-2"
             id="task-edit-name"
             type="text"
@@ -206,7 +211,7 @@ export function TaskEditForm({
             }}
           />
           {fieldErrors.title && (
-            <p className="mt-2 text-sm text-red-700" id="task-edit-name-error" role="alert">
+            <p className="mt-2 text-sm text-[var(--color-danger)]" id="task-edit-name-error" role="alert">
               {fieldErrors.title}
             </p>
           )}
@@ -230,7 +235,7 @@ export function TaskEditForm({
             }}
           />
           {fieldErrors.description && (
-            <p className="mt-2 text-sm text-red-700" id="task-edit-description-error" role="alert">
+            <p className="mt-2 text-sm text-[var(--color-danger)]" id="task-edit-description-error" role="alert">
               {fieldErrors.description}
             </p>
           )}
@@ -285,7 +290,7 @@ export function TaskEditForm({
           </p>
         )}
         {fieldErrors.schedule && (
-          <p className="mt-2 text-sm text-red-700" id="task-edit-schedule-error" role="alert">
+          <p className="mt-2 text-sm text-[var(--color-danger)]" id="task-edit-schedule-error" role="alert">
             {fieldErrors.schedule}
           </p>
         )}

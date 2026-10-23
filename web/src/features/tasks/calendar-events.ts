@@ -14,11 +14,11 @@ export function taskToCalendarEvent(task: Task): EventInput {
     title: task.title,
     start: task.schedule.type === 'timed' ? task.schedule.at : task.schedule.date,
     allDay: task.schedule.type === 'allDay',
-    startEditable: !task.completed,
+    startEditable: !task.completed && !task.recurrence,
     durationEditable: false,
     interactive: true,
     className: task.completed ? 'planly-event--completed' : 'planly-event--active',
-    extendedProps: { task },
+    extendedProps: { task, recurring:Boolean(task.recurrence) },
   }
 }
 

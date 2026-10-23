@@ -1,7 +1,6 @@
 @import 'tailwindcss';
 @import '@fullcalendar/react/skeleton.css';
 @import '@fullcalendar/react/themes/monarch/theme.css';
-@import '@fullcalendar/react/themes/monarch/palettes/green.css';
 
 @theme {
   --breakpoint-xs: 30rem;
@@ -9,20 +8,30 @@
 
 @layer base {
   :root {
-    --color-canvas: #f2f4ec;
-    --color-sidebar: #f8f9f4;
-    --color-surface: #ffffff;
-    --color-surface-muted: #f5f7f1;
-    --color-ink: #182017;
-    --color-muted: #677064;
-    --color-border: #dfe4da;
-    --color-accent: #315f3c;
-    --color-accent-strong: #244b2e;
-    --color-accent-soft: #e4efe0;
-    --color-focus: #3c7b4b;
-    --color-danger: #b42318;
-    --color-danger-strong: #8f1c13;
-    --color-danger-soft: #fef3f2;
+    --color-canvas: #0e0e10;
+    --color-sidebar: #141417;
+    --color-surface: #1a1a1d;
+    --color-surface-muted: #232326;
+    --color-ink: #ede9e0;
+    --color-muted: #a8a6a0;
+    --color-border: #2a2a2e;
+    --color-accent: #ff8a00;
+    --color-accent-strong: #ffad4d;
+    --color-accent-soft: #352516;
+    --color-focus: #ffad4d;
+    --color-danger: #ff7777;
+    --color-danger-strong: #ff9999;
+    --color-danger-soft: #371e23;
+    --color-on-accent: #0e0e10;
+    --color-success: #4cd08a;
+    --color-success-soft: #172c22;
+    --color-meeting: #9db8ff;
+    --color-meeting-soft: #20283d;
+    --color-birthday: #e6b3ff;
+    --color-birthday-soft: #30213b;
+    --motion-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --motion-glide: cubic-bezier(0.16, 1, 0.3, 1);
+    color-scheme: dark;
     color: var(--color-ink);
     background: var(--color-canvas);
     font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -47,7 +56,8 @@
 
   button,
   input,
-  textarea {
+  textarea,
+  select {
     font: inherit;
   }
 
@@ -58,15 +68,228 @@
 }
 
 @layer components {
+  .planly-auth {
+    background: radial-gradient(ellipse at 12% 20%, #ff8a000c, transparent 48%), var(--color-canvas);
+  }
+
+  .planly-auth-layout {
+    display: grid;
+    width: 100%;
+    max-width: 68rem;
+    align-items: center;
+    gap: clamp(2rem, 6vw, 6rem);
+  }
+
+  .planly-auth-story {
+    display: none;
+  }
+
+  .planly-auth-title {
+    margin-top: 1.5rem;
+    font-size: clamp(2.75rem, 5vw, 4.5rem);
+    font-weight: 800;
+    line-height: 1.08;
+    letter-spacing: -0.055em;
+  }
+
+  .planly-auth-preview {
+    margin-top: 2.5rem;
+    display: grid;
+    gap: 0.75rem;
+    border-left: 1px solid var(--color-border);
+    padding-left: 1.25rem;
+  }
+
+  .planly-auth-preview > div {
+    border: 1px solid var(--color-border);
+    border-radius: 0.75rem;
+    background: var(--color-surface);
+    padding: 1rem 1.25rem;
+  }
+
+  .planly-auth-preview span {
+    display: block;
+    margin-bottom: 0.4rem;
+    color: var(--color-accent);
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .planly-navigation-link {
+    border: 1px solid transparent;
+    transition: border-color 180ms ease, color 180ms ease, background-color 180ms ease;
+  }
+
+  .planly-navigation-link[aria-current='page'] {
+    border-color: color-mix(in srgb, var(--color-accent) 28%, transparent);
+  }
+
+  #planly-workspace h1 {
+    font-weight: 750;
+    letter-spacing: -0.035em;
+    font-size: clamp(1.5rem, 2.5vw, 2rem);
+  }
+
+  .planly-segments {
+    position: relative;
+    isolation: isolate;
+    display: grid;
+    grid-template-columns: repeat(var(--segment-count), minmax(0, 1fr));
+    min-width: 0;
+    border: 1px solid var(--color-border);
+    border-radius: 0.875rem;
+    background: var(--color-sidebar);
+    padding: 0.25rem;
+  }
+
+  .planly-segments-indicator {
+    pointer-events: none;
+    position: absolute;
+    z-index: -1;
+    top: 0.25rem;
+    bottom: 0.25rem;
+    left: 0.25rem;
+    width: calc((100% - 0.5rem) / var(--segment-count));
+    border-radius: 0.625rem;
+    background: var(--color-accent);
+    box-shadow: 0 2px 8px #00000024;
+    transform: translateX(calc(var(--segment-index) * 100%));
+    transition: transform 300ms var(--motion-glide);
+  }
+
+  .planly-segments button {
+    min-width: 0;
+    min-height: 2.75rem;
+    cursor: pointer;
+    border-radius: 0.625rem;
+    padding: 0.5rem;
+    color: var(--color-muted);
+    font-size: 0.875rem;
+    font-weight: 650;
+    overflow-wrap: anywhere;
+    transition: color 180ms ease;
+  }
+
+  .planly-segments button[aria-pressed='true'] {
+    color: var(--color-on-accent);
+  }
+
+  .planly-segments button:focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 3px;
+  }
+
+  .planly-calendar-view-control {
+    margin-bottom: 1rem;
+    max-width: 22rem;
+    margin-left: auto;
+  }
+
+  .planly-dialog-backdrop {
+    background: #000000b3;
+    backdrop-filter: blur(6px);
+    animation: planly-fade-in 180ms ease both;
+  }
+
+  .planly-dialog-panel {
+    max-height: calc(100dvh - 2rem);
+    overflow-y: auto;
+    box-shadow: 0 24px 80px #00000066;
+    animation: planly-dialog-in 350ms var(--motion-spring) both;
+  }
+
+  .planly-notice {
+    animation: planly-notice-in 220ms var(--motion-glide) both;
+  }
+
+  .planly-completion-success {
+    animation: planly-check-pop 350ms var(--motion-spring) both;
+  }
+
+  .planly-interactive-card {
+    transition: border-color 180ms ease, box-shadow 180ms ease, background-color 180ms ease, transform 300ms var(--motion-spring);
+  }
+
+  .planly-interactive-card:focus-within,
+  .planly-task-tile:focus-within {
+    border-color: var(--color-focus);
+  }
+
+  .planly-input::placeholder {
+    color: var(--color-muted);
+    opacity: 0.8;
+  }
+
+  .planly-button-primary:not(:disabled) {
+    box-shadow: 0 3px 0 #9d5200, 0 6px 18px #ff8a0012;
+  }
+
+  .planly-button-primary:active:not(:disabled),
+  .planly-button-secondary:active:not(:disabled),
+  .planly-button-danger:active:not(:disabled) {
+    transform: translateY(1px) scale(0.97);
+    box-shadow: none;
+  }
+
+  .planly-button-primary:disabled,
+  .planly-button-secondary:disabled,
+  .planly-button-danger:disabled {
+    transform: none;
+  }
+
+  .planly-calendar .fc-event:focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+
+  .planly-calendar .fc-toolbar button {
+    min-height: 2.75rem;
+    min-width: 2.75rem;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .planly-button-primary:hover:not(:disabled):not(:active),
+    .planly-button-secondary:hover:not(:disabled):not(:active) {
+      transform: translateY(-2px);
+    }
+
+    .planly-interactive-card:hover {
+      border-color: color-mix(in srgb, var(--color-accent) 55%, var(--color-border));
+      box-shadow: 0 8px 24px #00000030;
+      transform: translateY(-2px);
+    }
+
+    .planly-task-tile:hover:not(.planly-task-tile--dragging) {
+      transform: translateY(-1px);
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .planly-auth-layout {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    }
+
+    .planly-auth-story {
+      display: block;
+    }
+  }
+
+  @media (max-width: 479px) {
+    .planly-segments button {
+      font-size: 0.75rem;
+      padding-inline: 0.25rem;
+    }
+  }
+
   .planly-card {
     border: 1px solid var(--color-border);
-    border-radius: 1.5rem;
-    background: color-mix(in srgb, var(--color-surface) 96%, transparent);
-    box-shadow: 0 1px 2px rgb(29 45 28 / 5%);
+    border-radius: 1rem;
+    background: var(--color-surface);
+    box-shadow: 0 1px 2px rgb(0 0 0 / 16%);
   }
 
   .planly-eyebrow {
-    color: var(--color-muted);
+    color: var(--color-accent);
     font-size: 0.7rem;
     font-weight: 700;
     letter-spacing: 0.12em;
@@ -78,7 +301,7 @@
     width: 100%;
     border: 1px solid var(--color-border);
     border-radius: 0.75rem;
-    background: white;
+    background: var(--color-surface);
     padding: 0.625rem 0.75rem;
     color: var(--color-ink);
     font-size: 1rem;
@@ -88,7 +311,7 @@
 
   .planly-input:focus {
     border-color: var(--color-accent);
-    box-shadow: 0 0 0 3px rgb(49 95 60 / 14%);
+    box-shadow: 0 0 0 3px rgb(255 138 0 / 18%);
   }
 
   .planly-input:disabled {
@@ -108,13 +331,13 @@
     border-radius: 0.75rem;
     padding: 0.625rem 1rem;
     font-weight: 650;
-    transition: background-color 180ms ease, color 180ms ease, transform 180ms ease;
+    transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease, box-shadow 180ms ease, transform 300ms var(--motion-spring);
   }
 
   .planly-button-primary {
     border: 1px solid var(--color-accent);
     background: var(--color-accent);
-    color: white;
+    color: var(--color-on-accent);
   }
 
   .planly-button-primary:hover {
@@ -123,7 +346,7 @@
 
   .planly-button-secondary {
     border: 1px solid var(--color-border);
-    background: white;
+    background: var(--color-surface);
     color: var(--color-ink);
   }
 
@@ -134,7 +357,7 @@
   .planly-button-danger {
     border: 1px solid var(--color-danger);
     background: var(--color-danger);
-    color: white;
+    color: var(--color-on-accent);
   }
 
   .planly-button-danger:hover {
@@ -156,11 +379,11 @@
   }
 
   .planly-error {
-    border: 1px solid #fecaca;
+    border: 1px solid color-mix(in srgb, var(--color-danger) 35%, var(--color-border));
     border-radius: 0.875rem;
-    background: #fef2f2;
+    background: var(--color-danger-soft);
     padding: 0.75rem;
-    color: #991b1b;
+    color: var(--color-danger);
     font-size: 0.875rem;
   }
 
@@ -172,7 +395,7 @@
     border-radius: 0.75rem;
     background: var(--color-ink);
     padding: 0.75rem 1rem;
-    color: white;
+    color: var(--color-on-accent);
     transition: top 160ms ease;
   }
 
@@ -182,11 +405,39 @@
 
   .planly-calendar {
     --fc-monarch-primary: var(--color-accent);
+    --fc-monarch-primary-foreground: var(--color-on-accent);
     --fc-monarch-primary-over: var(--color-accent-strong);
+    --fc-monarch-primary-down: #e87900;
+    --fc-monarch-secondary: var(--color-surface-muted);
+    --fc-monarch-secondary-foreground: var(--color-ink);
+    --fc-monarch-secondary-over: #303034;
+    --fc-monarch-secondary-down: #3a3a40;
+    --fc-monarch-tertiary: var(--color-accent-soft);
+    --fc-monarch-tertiary-foreground: var(--color-accent-strong);
+    --fc-monarch-tertiary-over: #48311b;
+    --fc-monarch-tertiary-down: #57391b;
+    --fc-monarch-event: var(--color-accent);
+    --fc-monarch-event-contrast: var(--color-on-accent);
+    --fc-monarch-highlight: #ff8a0012;
+    --fc-monarch-now: var(--color-accent);
+    --fc-monarch-selected: var(--color-accent);
+    --fc-monarch-selected-foreground: var(--color-on-accent);
+    --fc-monarch-selected-over: var(--color-accent-strong);
+    --fc-monarch-selected-down: #e87900;
     --fc-monarch-outline: var(--color-focus);
     --fc-monarch-border: var(--color-border);
-    --fc-monarch-background: white;
+    --fc-monarch-strong-border: #505055;
+    --fc-monarch-background: var(--color-surface);
+    --fc-monarch-popover: var(--color-sidebar);
+    --fc-monarch-popover-foreground: var(--color-ink);
+    --fc-monarch-faint: #ffffff05;
+    --fc-monarch-muted: var(--color-surface-muted);
+    --fc-monarch-strong: #ffffff14;
+    --fc-monarch-stronger: #ffffff20;
+    --fc-monarch-strongest: #ffffff30;
     --fc-monarch-foreground: var(--color-ink);
+    --fc-monarch-faint-foreground: #85858d;
+    --fc-monarch-muted-foreground: var(--color-muted);
     min-width: 0;
   }
 
@@ -200,7 +451,7 @@
     font-weight: 700;
   }
 
-  .planly-calendar .fc-view {
+  .planly-calendar .planly-calendar-view {
     overflow: hidden;
     border-radius: 1rem;
   }
@@ -211,8 +462,12 @@
   }
 
   .planly-calendar .planly-event--completed {
-    filter: saturate(0.25);
-    opacity: 0.58;
+    background-color: var(--color-surface-muted);
+    color: var(--color-muted);
+  }
+
+  .planly-calendar .planly-event--completed .planly-event-title {
+    text-decoration: line-through;
   }
 
   .planly-event-content {
@@ -240,39 +495,38 @@
     min-width: 0;
     overflow: hidden;
     border: 1px solid var(--color-border);
-    border-radius: 1.25rem;
-    background: color-mix(in srgb, var(--color-surface-muted) 84%, white);
+    border-radius: 1rem;
+    background: color-mix(in srgb, var(--color-surface-muted) 84%, var(--color-surface));
     transition: border-color 180ms ease, background-color 180ms ease, box-shadow 180ms ease;
   }
 
   .planly-task-column--over {
     border-color: var(--color-accent);
-    background: color-mix(in srgb, var(--color-accent-soft) 48%, white);
-    box-shadow: 0 0 0 3px rgb(49 95 60 / 10%);
+    background: color-mix(in srgb, var(--color-accent-soft) 48%, var(--color-surface));
+    box-shadow: 0 0 0 3px rgb(255 138 0 / 12%);
   }
 
   .planly-task-tile {
     border: 1px solid var(--color-border);
     border-radius: 1rem;
-    background: white;
+    background: var(--color-surface);
     padding: 0.875rem;
-    box-shadow: 0 1px 2px rgb(29 45 28 / 5%);
+    box-shadow: 0 1px 2px rgb(0 0 0 / 16%);
     transition: border-color 180ms ease, box-shadow 180ms ease, opacity 180ms ease, transform 180ms ease;
   }
 
   .planly-task-tile:hover {
     border-color: color-mix(in srgb, var(--color-accent) 45%, var(--color-border));
-    box-shadow: 0 8px 22px rgb(29 45 28 / 8%);
-    transform: translateY(-1px);
+    box-shadow: 0 8px 22px rgb(0 0 0 / 24%);
   }
 
   .planly-task-tile--completed {
-    background: color-mix(in srgb, var(--color-surface-muted) 62%, white);
+    background: color-mix(in srgb, var(--color-surface-muted) 62%, var(--color-surface));
   }
 
   .planly-task-tile--dragging {
     opacity: 0.45;
-    box-shadow: 0 14px 28px rgb(29 45 28 / 14%);
+    box-shadow: 0 14px 28px rgb(0 0 0 / 28%);
     transform: rotate(1deg) scale(0.985);
   }
 
@@ -287,7 +541,7 @@
     border-radius: 0.75rem;
     background: transparent;
     color: var(--color-muted);
-    transition: background-color 180ms ease, color 180ms ease, transform 180ms ease;
+    transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease, box-shadow 180ms ease, transform 300ms var(--motion-spring);
   }
 
   .planly-task-drag-handle:hover {
@@ -309,6 +563,27 @@
     cursor: not-allowed;
     opacity: 0.45;
   }
+}
+
+@keyframes planly-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes planly-dialog-in {
+  from { opacity: 0; transform: translateY(12px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes planly-notice-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes planly-check-pop {
+  0% { transform: scale(0.8); }
+  55% { transform: scale(1.2); }
+  100% { transform: scale(1); }
 }
 
 @media (max-width: 767px) {
@@ -333,4 +608,47 @@
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
   }
+
+  .planly-button-primary,
+  .planly-button-secondary,
+  .planly-button-danger,
+  .planly-interactive-card,
+  .planly-task-tile,
+  .planly-task-drag-handle {
+    transform: none !important;
+  }
+}
+
+/* Color complements the icon and border pattern for each calendar entry type. */
+.planly-calendar .planly-event--meeting {
+  border-inline-start: 3px double var(--color-meeting);
+  background-color: var(--color-meeting-soft);
+  color: var(--color-meeting);
+}
+
+.planly-birthday-row {
+  @apply flex min-h-11 w-full cursor-pointer items-start gap-3 rounded-2xl border border-[var(--color-border)] p-4 text-left transition-colors hover:bg-[var(--color-surface-muted)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--color-focus)];
+}
+
+.planly-calendar .planly-event--birthday {
+  border-inline-start: 3px dashed var(--color-birthday);
+  background-color: var(--color-birthday-soft);
+  color: var(--color-birthday);
+}
+
+/* Event content is inside FullCalendar's contrast-colored inner element. */
+.planly-event--meeting .planly-event-content {
+  color: var(--color-meeting);
+}
+
+.planly-event--birthday .planly-event-content {
+  color: var(--color-birthday);
+}
+
+.planly-event--completed .planly-event-content {
+  color: var(--color-muted);
+}
+
+.planly-calendar .planly-event--completed {
+  background-color: var(--color-surface-muted);
 }

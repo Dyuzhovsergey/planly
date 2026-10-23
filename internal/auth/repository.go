@@ -19,5 +19,6 @@ type Repository interface {
 	FindSessionUser(context.Context, []byte) (SessionUser, error)
 	UpdateSessionCSRF(context.Context, []byte, []byte) error
 	UpdateUserTimeZone(context.Context, string, string) (User, error)
+	UpdateUserProfile(context.Context, string, ProfileUpdate) (User, error)
 	DeleteSession(context.Context, []byte) error
 }

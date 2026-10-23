@@ -15,6 +15,7 @@ import (
 const testOrigin = "http://localhost:8080"
 
 type fakeAuthService struct {
+	profile            auth.ProfileUpdate
 	result             auth.AuthResult
 	identity           auth.SessionIdentity
 	registerErr        error
@@ -56,6 +57,15 @@ func (service *fakeAuthService) Authenticate(_ context.Context, sessionToken str
 func (service *fakeAuthService) UpdateTimeZone(_ context.Context, userID string, input auth.UpdateTimeZoneInput) (auth.User, error) {
 	service.updatedUserID = userID
 	service.updatedTimeZone = input
+	return service.updatedUser, service.updateTimeZoneErr
+}
+
+func (service *fakeAuthService) UpdateProfile(_ context.Context, userID string, input auth.ProfileUpdate) (auth.User, error) {
+	service.updatedUserID = userID
+	service.profile = input
+	if input.TimeZone != nil {
+		service.updatedTimeZone = auth.UpdateTimeZoneInput{TimeZone: *input.TimeZone}
+	}
 	return service.updatedUser, service.updateTimeZoneErr
 }
 

@@ -1,3 +1,4 @@
+import { RecurrenceCompletionControl } from '../recurrence/CompletionControl'
 import { useState } from 'react'
 
 import { ApiError } from '../../shared/api/client'
@@ -10,18 +11,25 @@ interface TaskCompletionControlProps {
   csrfToken: string
   disabled?: boolean
   onAuthenticationRequired: () => void
+  onBusyChange?: (busy: boolean) => void
   onUpdated: (task: Task) => void
 }
 
-export function TaskCompletionControl({
+export function TaskCompletionControl(props:TaskCompletionControlProps) {
+ return props.task.recurrence ? <RecurrenceCompletionControl {...props}/> : <StandaloneCompletionControl {...props}/>
+}
+
+function StandaloneCompletionControl({
   task,
   csrfToken,
   disabled = false,
   onAuthenticationRequired,
+  onBusyChange,
   onUpdated,
 }: TaskCompletionControlProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [isCelebrating, setIsCelebrating] = useState(false)
   const nextCompleted = !task.completed
   const action = nextCompleted ? 'Завершить' : 'Открыть повторно'
 
@@ -31,9 +39,13 @@ export function TaskCompletionControl({
     }
 
     setIsSubmitting(true)
+    onBusyChange?.(true)
     setError(null)
+    setIsCelebrating(false)
     try {
-      onUpdated(await updateTask(task.id, { completed: nextCompleted }, csrfToken))
+      const updated = await updateTask(task.id, { completed: nextCompleted }, csrfToken)
+      setIsCelebrating(updated.completed)
+      onUpdated(updated)
     } catch (caught: unknown) {
       if (caught instanceof ApiError && caught.status === 401) {
         onAuthenticationRequired()
@@ -46,10 +58,11 @@ export function TaskCompletionControl({
       }
     } finally {
       setIsSubmitting(false)
+      onBusyChange?.(false)
     }
   }
 
-  const Icon = nextCompleted ? CheckIcon : ReopenIcon
+  const Icon = isCelebrating || nextCompleted ? CheckIcon : ReopenIcon
 
   return (
     <div>
@@ -60,7 +73,11 @@ export function TaskCompletionControl({
         aria-label={`${action} задачу ${task.title}`}
         onClick={() => void handleClick()}
       >
-        <Icon className="size-4" />
+        <span className={isCelebrating ? 'planly-completion-success' : ''}
+          data-completion-feedback={isCelebrating || undefined}
+          onAnimationEnd={() => setIsCelebrating(false)} aria-hidden="true">
+          <Icon className="size-4" />
+        </span>
         {isSubmitting ? 'Сохраняем…' : action}
       </button>
       {error && <p className="planly-error mt-2" role="alert">{error}</p>}

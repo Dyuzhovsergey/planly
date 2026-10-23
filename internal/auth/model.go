@@ -23,11 +23,15 @@ var (
 
 // User is the authentication-facing representation of a Planly user.
 type User struct {
+	AvatarKey    string
 	ID           string
 	Username     string
 	Email        string
 	PasswordHash string
 	TimeZone     string
+	DisplayName  string
+	WeekStartsOn string
+	TimeFormat   string
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 }
@@ -87,4 +91,10 @@ type ValidationError struct {
 
 func (err *ValidationError) Error() string {
 	return "validation failed"
+}
+
+// ProfileUpdate contains optional account preferences. Nil preserves the stored value.
+// An empty display name deliberately falls back to the username in clients.
+type ProfileUpdate struct {
+	DisplayName, TimeZone, WeekStartsOn, TimeFormat *string
 }
