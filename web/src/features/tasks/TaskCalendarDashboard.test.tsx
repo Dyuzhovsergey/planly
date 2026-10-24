@@ -1,3 +1,4 @@
+import { changeField } from '../../shared/ui/date-time-testing'
 import { CalendarPreferencesContext } from '../../shared/calendar/preferences'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, useLocation, useNavigate } from 'react-router'
@@ -213,7 +214,7 @@ describe('TaskCalendarDashboard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Задачу' }))
     fireEvent.change(screen.getByLabelText('Название'), { target: { value: created.title } })
     fireEvent.click(screen.getByLabelText('Весь день'))
-    fireEvent.change(screen.getByLabelText('Дата'), { target: { value: '2026-10-25' } })
+    changeField(screen.getByLabelText('Дата'), { target: { value: '2026-10-25' } })
     fireEvent.click(screen.getByRole('button', { name: 'Создать задачу' }))
 
     expect(await screen.findByText(`Задача «${created.title}» создана.`)).toBeInTheDocument()

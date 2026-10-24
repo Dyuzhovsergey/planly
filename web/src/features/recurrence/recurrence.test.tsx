@@ -1,3 +1,4 @@
+import { changeField } from '../../shared/ui/date-time-testing'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { createSeries, changeOccurrence, changeSeries, removeOccurrence, removeSeries } from './api'
@@ -41,11 +42,13 @@ it('creates a task series from the same draft without posting a standalone task'
  const fetchMock=vi.fn().mockResolvedValue(json(series,201));vi.stubGlobal('fetch',fetchMock);const saved=vi.fn();const plain=vi.fn()
  render(<TaskCreateForm csrfToken="csrf" timeZone="Europe/Moscow" onAuthenticationRequired={vi.fn()} onTaskCreated={plain} onSeriesCreated={saved}/> )
  fireEvent.change(screen.getByLabelText('Название'),{target:{value:'Новая серия'}})
- fireEvent.click(screen.getByRole('radio',{name:'Весь день'}));fireEvent.change(screen.getByLabelText('Дата'),{target:{value:'2026-10-26'}})
- fireEvent.click(screen.getByLabelText('Повторять'));expect(screen.getByLabelText('Название')).toHaveValue('Новая серия')
+ fireEvent.click(screen.getByRole('radio',{name:'Весь день'}));changeField(screen.getByLabelText('Дата'),{target:{value:'2026-10-26'}})
+ fireEvent.change(screen.getByLabelText('Повтор'),{target:{value:'daily'}});expect(screen.getByLabelText('Название')).toHaveValue('Новая серия')
  fireEvent.change(screen.getByLabelText('Повтор'),{target:{value:'weekly'}})
+ fireEvent.click(screen.getByRole('button',{name:'Настроить повтор…'}))
  fireEvent.click(screen.getByLabelText('Чт'))
- fireEvent.change(screen.getByLabelText('Окончание повторов'),{target:{value:'count'}});fireEvent.change(screen.getByLabelText('Количество повторений'),{target:{value:'3'}})
+ fireEvent.click(screen.getByLabelText('После количества повторений'));fireEvent.change(screen.getByLabelText('Количество повторений'),{target:{value:'3'}})
+ fireEvent.click(screen.getByRole('button',{name:'Готово'}))
  fireEvent.click(screen.getByRole('button',{name:'Создать серию задач'}))
  await waitFor(()=>expect(saved).toHaveBeenCalledOnce())
  expect(plain).not.toHaveBeenCalled();expect(fetchMock.mock.calls[0][0]).toBe('/api/v1/task-series')
@@ -54,7 +57,7 @@ it('creates a task series from the same draft without posting a standalone task'
 it('prevents duplicate series submission and keeps the draft on uncertain network outcome',async()=>{
  let reject!:(reason:Error)=>void;const fetchMock=vi.fn(()=>new Promise<Response>((_yes,no)=>{reject=no}));vi.stubGlobal('fetch',fetchMock)
  render(<TaskCreateForm csrfToken="csrf" timeZone="UTC" onAuthenticationRequired={vi.fn()} onTaskCreated={vi.fn()} onSeriesCreated={vi.fn()}/> )
- fireEvent.change(screen.getByLabelText('Название'),{target:{value:'Черновик'}});fireEvent.click(screen.getByRole('radio',{name:'Весь день'}));fireEvent.change(screen.getByLabelText('Дата'),{target:{value:'2026-10-26'}});fireEvent.click(screen.getByLabelText('Повторять'))
+ fireEvent.change(screen.getByLabelText('Название'),{target:{value:'Черновик'}});fireEvent.click(screen.getByRole('radio',{name:'Весь день'}));changeField(screen.getByLabelText('Дата'),{target:{value:'2026-10-26'}});fireEvent.change(screen.getByLabelText('Повтор'),{target:{value:'daily'}})
  const form=screen.getByRole('button',{name:'Создать серию задач'}).closest('form')!
  fireEvent.submit(form);fireEvent.submit(form);expect(fetchMock).toHaveBeenCalledOnce();reject(new Error('offline'))
  await screen.findByRole('alert');expect(screen.getByLabelText('Название')).toHaveValue('Черновик');expect(screen.getByRole('alert')).toHaveTextContent('чтобы не создать дубль')
@@ -62,7 +65,7 @@ it('prevents duplicate series submission and keeps the draft on uncertain networ
 it('creates a timed event series with a fixed zone and preserves content when repeat is enabled',async()=>{
  const saved=vi.fn();const plain=vi.fn();const fetchMock=vi.fn().mockResolvedValue(json({...series,kind:'event'},201));vi.stubGlobal('fetch',fetchMock)
  render(<EventDialog timeZone="Europe/Moscow" initialDate="2026-10-26" csrfToken="csrf" fallbackFocusRef={{current:null}} onAuthenticationRequired={vi.fn()} onClose={vi.fn()} onSaved={plain} onDeleted={vi.fn()} onSeriesCreated={saved}/> )
- fireEvent.change(screen.getByLabelText('Название'),{target:{value:'Тренировка'}});fireEvent.change(screen.getByLabelText('Место'),{target:{value:'Зал'}});fireEvent.click(screen.getByLabelText('Повторять'))
+ fireEvent.change(screen.getByLabelText('Название'),{target:{value:'Тренировка'}});fireEvent.change(screen.getByLabelText('Место'),{target:{value:'Зал'}});fireEvent.change(screen.getByLabelText('Повтор'),{target:{value:'daily'}})
  expect(screen.getByLabelText('Место')).toHaveValue('Зал');fireEvent.click(screen.getByRole('button',{name:'Создать серию мероприятий'}))
  await waitFor(()=>expect(saved).toHaveBeenCalledOnce());expect(plain).not.toHaveBeenCalled()
  expect(fetchMock.mock.calls[0][0]).toBe('/api/v1/event-series');expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({location:'Зал',schedule:{start:'2026-10-26T06:00:00Z',end:'2026-10-26T07:00:00Z'},recurrence:{timeZone:'Europe/Moscow'}})
@@ -84,8 +87,8 @@ it('preserves edit intent across 412 and requires explicit review/retry using th
 it('keeps the series rule draft on 409 without modifying completed history',async()=>{
  const fetchMock=vi.fn(async(path:string,init?:RequestInit)=>init?.method==='PATCH'?json({code:'recurrence_conflict'},409):json(path.includes('/occurrences/')?occurrence:series));vi.stubGlobal('fetch',fetchMock);const changed=dialog()
  await screen.findByText('Повтор');fireEvent.click(screen.getByRole('button',{name:'Вся серия'}));await waitFor(()=>expect(screen.getByRole('button',{name:'Изменить'})).toBeEnabled());fireEvent.click(screen.getByRole('button',{name:'Изменить'}))
- fireEvent.change(screen.getByLabelText('Каждые N дней'),{target:{value:'2'}});fireEvent.click(screen.getByRole('button',{name:'Сохранить изменения'}))
- await screen.findByRole('alert');expect(screen.getByLabelText('Каждые N дней')).toHaveValue(2);expect(screen.getByRole('alert')).toHaveTextContent('не сохранены');expect(changed).not.toHaveBeenCalled()
+ fireEvent.click(screen.getByRole('button',{name:'Настроить повтор…'}));fireEvent.change(screen.getByLabelText('Раз в'),{target:{value:'2'}});fireEvent.click(screen.getByRole('button',{name:'Готово'}));fireEvent.click(screen.getByRole('button',{name:'Сохранить изменения'}))
+ await screen.findByRole('alert');expect(screen.getByText(/Каждые 2 дн/)).toBeInTheDocument();expect(screen.getByRole('alert')).toHaveTextContent('не сохранены');expect(changed).not.toHaveBeenCalled()
 })
 it('requires explicit whole-series deletion confirmation and uses the series version',async()=>{
  const fetchMock=vi.fn(async(path:string,init?:RequestInit)=>init?.method==='DELETE'?new Response(null,{status:204}):json(path.includes('/occurrences/')?occurrence:{...series,revision:4}));vi.stubGlobal('fetch',fetchMock);const changed=dialog()

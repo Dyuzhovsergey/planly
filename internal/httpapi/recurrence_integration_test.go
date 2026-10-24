@@ -170,6 +170,57 @@ func TestRecurrenceHTTPIntegration(t *testing.T) {
 	if string(data) != "{\"items\":[]}\n" {
 		t.Fatal("legacy list changed", string(data))
 	}
+
+	// Both wire resources accept calendar frequencies, enforce ownership/revisions,
+	// and keep the nominal key through exceptions and cancellation.
+	for _, kind := range []string{"task", "event"} {
+		for _, frequency := range []string{"monthly", "yearly"} {
+			route := "/api/v1/" + kind + "-series"
+			schedule := `{"type":"allDay","date":"2024-02-29"}`
+			key := "2028-02-29"
+			from, to := "2028-02-01", "2028-03-01"
+			if frequency == "monthly" {
+				schedule = `{"type":"allDay","date":"2026-01-31"}`
+				key = "2026-03-31"
+				from, to = "2026-03-01", "2026-04-01"
+			}
+			if kind == "event" {
+				if frequency == "monthly" {
+					schedule = `{"type":"allDay","startDate":"2026-01-31","endDate":"2026-02-02"}`
+				} else {
+					schedule = `{"type":"allDay","startDate":"2024-02-29","endDate":"2024-03-02"}`
+				}
+			}
+			input := fmt.Sprintf(`{"title":"Calendar rule","schedule":%s,"recurrence":{"frequency":%q,"interval":1,"end":{"type":"count","count":3}}}`, schedule, frequency)
+			raw, h := call(owner, "POST", route, input, "", 201, nil)
+			var created recurrence.Series
+			if err := json.Unmarshal(raw, &created); err != nil {
+				t.Fatal(err)
+			}
+			endpoint := route + "/" + created.ID
+			instance := endpoint + "/occurrences/" + key
+			version := h.Get("ETag")
+			call(other, "GET", endpoint, "", "", 404, nil)
+			call(other, "PATCH", instance, `{"title":"foreign"}`, version, 404, nil)
+			raw, _ = call(owner, "GET", route+"/occurrences?from="+from+"&to="+to, "", "", 200, nil)
+			if !strings.Contains(string(raw), `"occurrenceDate":"`+key+`"`) {
+				t.Fatal(string(raw))
+			}
+			_, h = call(owner, "PATCH", instance, `{"title":"Individual"}`, version, 200, nil)
+			call(owner, "PATCH", endpoint, `{"title":"stale"}`, version, 412, nil)
+			version = h.Get("ETag")
+			raw, h = call(owner, "PATCH", endpoint, `{"description":"Series updated"}`, version, 200, nil)
+			version = h.Get("ETag")
+			raw, _ = call(owner, "GET", instance, "", "", 200, nil)
+			if !strings.Contains(string(raw), `"title":"Individual"`) || !strings.Contains(string(raw), `"description":"Series updated"`) {
+				t.Fatal(string(raw))
+			}
+			_, h = call(owner, "DELETE", instance, "", version, 204, nil)
+			version = h.Get("ETag")
+			call(owner, "GET", instance, "", "", 404, nil)
+			call(owner, "DELETE", endpoint, "", version, 204, nil)
+		}
+	}
 	eventBody := `{"title":"Trip","location":"Park","link":"https://example.com","schedule":{"type":"allDay","startDate":"2026-10-01","endDate":"2026-10-04"},"recurrence":{"frequency":"weekly","interval":1,"weekDays":["thursday"],"end":{"type":"count","count":2}}}`
 	eventData, eventHeaders := call(owner, "POST", "/api/v1/event-series", eventBody, "", 201, nil)
 	var eventSeries recurrence.Series

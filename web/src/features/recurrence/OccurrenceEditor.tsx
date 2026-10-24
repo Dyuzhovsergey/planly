@@ -1,3 +1,4 @@
+import { DateTimeField } from '../../shared/ui/DateTimeField'
 import { useCalendarPreferences } from '../../shared/calendar/preferences'
 import { formatRecurringContent } from './view'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
@@ -7,7 +8,7 @@ import { eventDraft, validateEventDraft, type EventDraft } from '../events/event
 import type { PlanlyEvent } from '../events/types'
 import { taskScheduleInputValue, zonedDateTimeToRFC3339 } from '../tasks/date-time'
 import type { TaskSchedule } from '../tasks/types'
-import { RuleFields } from './RuleFields'
+import { RepeatPicker } from './RepeatPicker'
 import { recurrenceFailure, ruleDraft, validateRule, ruleSummary } from './rule'
 import type { Content, Occurrence, Patch, Series } from './types'
 import { occurrenceEvent } from './view'
@@ -36,7 +37,14 @@ export function OccurrenceEditor({base,zone,onSave,onReload,onCancel,onBusyChang
  const locked=!isSeries&&original.kind==='task'&&Boolean(original.completedAt)
  function field(key:Exclude<keyof EventDraft,'allDay'>,label:string,type='text'){
   const disabled=busy||(locked&&['start','startDate','end','endDate'].includes(key))
-  return <div className="min-w-0"><label htmlFor={`repeat-edit-${key}`} className="mb-1 block text-sm font-medium">{label}</label><input id={`repeat-edit-${key}`} name={key} data-autofocus={key==='title'||undefined} className="planly-input w-full min-w-0" type={type} step={type==='datetime-local'?60:undefined} value={draft[key]} disabled={disabled} onChange={e=>setDraft({...draft,[key]:e.target.value})} aria-invalid={Boolean(errors[key])} aria-describedby={errors[key]?`repeat-edit-error-${key}`:undefined}/>{errors[key]&&<p id={`repeat-edit-error-${key}`} className="mt-1 text-sm text-[var(--color-danger)]">{errors[key]}</p>}</div>
+  return <div className="min-w-0"><label htmlFor={`repeat-edit-${key}`} className="mb-1 block text-sm font-medium">{label}</label>
+  {type === 'date' || type === 'datetime-local' ? <DateTimeField
+    id={`repeat-edit-${key}`} name={key} label={label} timed={type === 'datetime-local'}
+    timeZone={effectiveZone} value={draft[key]} disabled={disabled}
+    invalid={Boolean(errors[key])} describedBy={errors[key] ? `repeat-edit-error-${key}` : undefined}
+    onChange={value => setDraft({ ...draft, [key]: value })}
+  /> : <input id={`repeat-edit-${key}`} name={key} data-autofocus={key==='title'||undefined} className="planly-input w-full min-w-0" type={type} value={draft[key]} disabled={disabled} onChange={e=>setDraft({...draft,[key]:e.target.value})} aria-invalid={Boolean(errors[key])} aria-describedby={errors[key]?`repeat-edit-error-${key}`:undefined}/>}
+  {errors[key]&&<p id={`repeat-edit-error-${key}`} className="mt-1 text-sm text-[var(--color-danger)]">{errors[key]}</p>}</div>
  }
  async function submit(event:FormEvent){
   event.preventDefault();if(busyRef.current||stale)return
@@ -78,7 +86,7 @@ export function OccurrenceEditor({base,zone,onSave,onReload,onCancel,onBusyChang
   {locked&&<p className="text-sm text-[var(--color-muted)]">Для переноса сначала откройте выполненное повторение повторно.</p>}
   <div className="grid min-w-0 gap-4 sm:grid-cols-2">{draft.allDay?<>{field('startDate',original.kind==='task'?'Дата':'Первый день','date')}{original.kind==='event'&&field('endDate','Последний день (включительно)','date')}</>:<>{field('start',original.kind==='task'?'Дата и время':'Начало','datetime-local')}{original.kind==='event'&&field('end','Окончание','datetime-local')}</>}</div>
   {original.kind==='event'&&<>{field('location','Место')}{field('link','Ссылка','url')}</>}
-  {isSeries&&<RuleFields value={rule} onChange={setRule} timed={!draft.allDay} anchor={draft.allDay?draft.startDate:draft.start} errors={errors} disabled={busy}/>}
+  {isSeries&&<RepeatPicker value={rule} onChange={setRule} timed={!draft.allDay} anchor={draft.allDay?draft.startDate:draft.start} errors={errors} disabled={busy}/>}
   {error&&<p className="planly-error" role="alert">{error}</p>}
   {stale&&<button type="button" className="planly-button-secondary" disabled={busy} onClick={()=>void reload()}>Обновить данные, сохранив черновик</button>}
   {latest&&<div className="rounded-xl border border-[var(--color-border)] p-3 text-sm" role="status"><p className="font-semibold">Актуальные данные сервера</p><p className="break-words">{latest.title}</p><p className="whitespace-pre-wrap break-words">{latest.description}</p><p className="text-xs leading-5">{formatRecurringContent(latest,original.kind,zone,timeFormat)}</p>{'recurrence'in latest&&<p className="text-xs leading-5">{ruleSummary(latest.recurrence)}</p>}</div>}

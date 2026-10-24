@@ -49,6 +49,12 @@ func ordinal(d Definition, date time.Time) (int64, bool) {
 			return 0, false
 		}
 		index = diff/int64(r.Interval) + 1
+	} else if r.Frequency == "monthly" || r.Frequency == "yearly" {
+		var ok bool
+		index, ok = newCalendarSequence(d).ordinal(date)
+		if !ok {
+			return 0, false
+		}
 	} else {
 		monday := first - int64(mondayIndex(a.Weekday()))
 		week := (n - monday) / 7
@@ -164,6 +170,9 @@ func generate(ctx context.Context, s Series, from, to int64, visit func(string) 
 	if r.End.Type == "until" {
 		end, _ := parseDate(r.End.Date)
 		to = min(to, dayNumber(end)+1)
+	}
+	if r.Frequency == "monthly" || r.Frequency == "yearly" {
+		return generateCalendar(ctx, s.Definition, from, to, visit)
 	}
 	if r.Frequency == "daily" {
 		step := int64(r.Interval)

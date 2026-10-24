@@ -1,3 +1,4 @@
+import { changeField } from '../../shared/ui/date-time-testing'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -53,7 +54,7 @@ describe('TaskEditForm', () => {
 
     expect(screen.getByLabelText('Название')).toHaveValue(task.title)
     expect(screen.getByLabelText(/Описание/)).toHaveValue(task.description)
-    expect(screen.getByLabelText('Дата и время', { selector: 'input[type="datetime-local"]' })).toHaveValue('2026-07-10T09:15')
+    expect(screen.getByRole('group', { name: 'Дата и время' })).toHaveTextContent('10 июля 2026 г., 09:15')
     expect(screen.getByRole('button', { name: 'Сохранить' })).toBeDisabled()
     expect(screen.getByLabelText('Название')).toHaveFocus()
   })
@@ -99,8 +100,8 @@ describe('TaskEditForm', () => {
     vi.stubGlobal('fetch', fetchMock)
     renderForm()
 
-    fireEvent.change(
-      screen.getByLabelText('Дата и время', { selector: 'input[type="datetime-local"]' }),
+    changeField(
+      screen.getByRole('group', { name: 'Дата и время' }),
       { target: { value: '2026-07-11T10:30' } },
     )
     fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
@@ -117,7 +118,7 @@ describe('TaskEditForm', () => {
     renderForm()
 
     fireEvent.click(screen.getByLabelText('Весь день'))
-    fireEvent.change(screen.getByLabelText('Дата', { selector: 'input[type="date"]' }), {
+    changeField(screen.getByLabelText('Дата'), {
       target: { value: '2026-07-12' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
@@ -140,7 +141,7 @@ describe('TaskEditForm', () => {
     renderForm(completed)
 
     expect(screen.getByLabelText('Весь день')).toBeDisabled()
-    expect(screen.getByLabelText('Дата и время', { selector: 'input[type="datetime-local"]' })).toBeDisabled()
+    expect(screen.getByRole('group', { name: 'Дата и время' })).toBeDisabled()
     fireEvent.change(screen.getByLabelText('Название'), { target: { value: updated.title } })
     fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
 

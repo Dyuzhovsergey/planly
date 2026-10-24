@@ -1,4 +1,5 @@
 import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { DateTimeField } from '../../shared/ui/DateTimeField'
 
 import { ApiError } from '../../shared/api/client'
 import { updateTask } from './api'
@@ -46,7 +47,7 @@ export function TaskEditForm({
   const [fieldToFocus, setFieldToFocus] = useState<FieldName | null>(null)
   const titleInputRef = useRef<HTMLInputElement>(null)
   const descriptionInputRef = useRef<HTMLTextAreaElement>(null)
-  const scheduleInputRef = useRef<HTMLInputElement>(null)
+  const scheduleInputRef = useRef<HTMLFieldSetElement>(null)
 
   const normalizedTitle = title.trim()
   const titleChanged = normalizedTitle !== task.title
@@ -267,17 +268,22 @@ export function TaskEditForm({
             <label className="text-sm font-medium text-[var(--color-ink)]" htmlFor="task-edit-schedule">
               {scheduleType === 'timed' ? 'Дата и время' : 'Дата'}
             </label>
-            <input
-              ref={scheduleInputRef}
-              className="planly-input mt-2"
+            <DateTimeField
+              inputRef={scheduleInputRef}
               id="task-edit-schedule"
-              type={scheduleType === 'timed' ? 'datetime-local' : 'date'}
-              step={scheduleType === 'timed' ? 60 : undefined}
+              label={scheduleType === 'timed' ? 'Дата и время' : 'Дата'}
+              timed={scheduleType === 'timed'} timeZone={timeZone}
+              disabled={task.completed || isSubmitting}
               value={scheduleValue}
-              aria-invalid={Boolean(fieldErrors.schedule)}
-              aria-describedby={fieldErrors.schedule ? 'task-edit-schedule-error' : undefined}
-              onChange={(event) => {
-                setScheduleValue(event.target.value)
+              invalid={Boolean(fieldErrors.schedule)}
+              describedBy={fieldErrors.schedule ? 'task-edit-schedule-error' : undefined}
+              onChange={(value) => {
+                setScheduleValue(value)
+                clearFieldError('schedule')
+              }}
+              onModeChange={(timed, value) => {
+                setScheduleType(timed ? 'timed' : 'allDay')
+                setScheduleValue(value)
                 clearFieldError('schedule')
               }}
             />

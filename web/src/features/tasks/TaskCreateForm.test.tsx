@@ -1,3 +1,4 @@
+import { changeField } from '../../shared/ui/date-time-testing'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -41,9 +42,7 @@ function renderForm(
 }
 
 function timedInput() {
-  return screen.getByLabelText('Дата и время', {
-    selector: 'input[type="datetime-local"]',
-  })
+  return screen.getByRole('group', { name: 'Дата и время' })
 }
 
 function fillTimedTask() {
@@ -53,7 +52,7 @@ function fillTimedTask() {
   fireEvent.change(screen.getByLabelText(/Описание/), {
     target: { value: 'Уточнить время приёма' },
   })
-  fireEvent.change(timedInput(), {
+  changeField(timedInput(), {
     target: { value: '2026-10-20T18:30' },
   })
 }
@@ -133,7 +132,7 @@ describe('TaskCreateForm', () => {
       target: { value: 'Подать показания счётчиков' },
     })
     fireEvent.click(screen.getByLabelText('Весь день'))
-    fireEvent.change(screen.getByLabelText('Дата'), {
+    changeField(screen.getByLabelText('Дата'), {
       target: { value: '2026-10-25' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Создать задачу' }))

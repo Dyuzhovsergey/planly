@@ -165,7 +165,7 @@ func normalizeDefinition(k Kind, d Definition) (Definition, error) {
 		}
 		r.WeekDays = append([]string(nil), r.WeekDays...)
 		sort.Slice(r.WeekDays, func(i, j int) bool { return weekdayIndex(r.WeekDays[i]) < weekdayIndex(r.WeekDays[j]) })
-	} else if r.Frequency != "daily" || len(r.WeekDays) != 0 {
+	} else if (r.Frequency != "daily" && r.Frequency != "monthly" && r.Frequency != "yearly") || len(r.WeekDays) != 0 {
 		return d, invalid("recurrence.frequency")
 	}
 	a := anchor(d)

@@ -1,3 +1,4 @@
+import { changeField } from '../../shared/ui/date-time-testing'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { useRef, useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -107,7 +108,7 @@ describe('TaskCreateDialog', () => {
 
     fireEvent.change(screen.getByLabelText('Название'), { target: { value: createdTask.title } })
     fireEvent.click(screen.getByLabelText('Весь день'))
-    fireEvent.change(screen.getByLabelText('Дата'), { target: { value: '2026-10-25' } })
+    changeField(screen.getByLabelText('Дата'), { target: { value: '2026-10-25' } })
     fireEvent.click(screen.getByRole('button', { name: 'Создать задачу' }))
 
     const dialog = screen.getByRole('dialog')

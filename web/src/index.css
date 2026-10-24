@@ -565,6 +565,84 @@
   }
 }
 
+.planly-inline-picker:focus { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+.planly-inline-picker button:disabled { cursor: not-allowed; }
+.planly-inline-picker:disabled .planly-time-wheel { overflow-y: hidden; pointer-events: none; }
+
+.planly-date-chip {
+  min-height: 2.75rem;
+  min-width: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 0.75rem;
+  background: var(--color-surface-muted);
+  padding-block: 0.5rem;
+  color: var(--color-ink);
+  cursor: pointer;
+}
+.planly-date-chip[aria-pressed='true'] {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+  color: var(--color-accent-strong);
+}
+.planly-date-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  /* Narrow gutters keep the seven touch targets usable on a 320px screen. */
+  margin-inline: -0.25rem;
+}
+.planly-calendar-day {
+  min-height: 2.75rem;
+  border-radius: 0.75rem;
+  border: 1px solid transparent;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.planly-calendar-day[data-outside='true'] { color: var(--color-muted); }
+.planly-calendar-day[aria-current='date'] { border-color: var(--color-border); }
+.planly-calendar-day[aria-pressed='true'] {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  font-weight: 650;
+}
+.planly-date-chip:focus-visible,
+.planly-calendar-day:focus-visible,
+.planly-time-wheel-item:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: -2px;
+}
+.planly-time-wheel {
+  height: 132px;
+  overflow-y: auto;
+  padding-block: 44px;
+  scroll-snap-type: y mandatory;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  border-radius: 0.875rem;
+  background: var(--color-surface-muted);
+}
+.planly-time-wheel::-webkit-scrollbar { display: none; }
+.planly-time-wheel-item {
+  display: block;
+  width: 100%;
+  height: 44px;
+  scroll-snap-align: center;
+  font-size: 1.25rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-muted);
+  border: 1px solid transparent;
+  border-radius: 0.75rem;
+  cursor: pointer;
+}
+.planly-time-wheel-item[aria-pressed='true'] {
+  background: var(--color-accent-soft);
+  color: var(--color-accent-strong);
+  border-color: var(--color-accent);
+  font-size: 1.5rem;
+  font-weight: 650;
+}
+.planly-calendar-day:active,
+.planly-date-chip:active,
+.planly-time-wheel-item:active { opacity: 0.75; }
 @keyframes planly-fade-in {
   from { opacity: 0; }
   to { opacity: 1; }

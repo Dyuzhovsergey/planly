@@ -1,3 +1,4 @@
+import { changeField } from '../../shared/ui/date-time-testing'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, useLocation, useNavigate } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -49,11 +50,11 @@ describe('EventListPage', () => {
     expect(screen.getByLabelText('Название')).toHaveFocus()
     fireEvent.change(screen.getByLabelText('Название'), { target: { value: 'Поездка' } })
     fireEvent.click(screen.getByLabelText('Весь день'))
-    fireEvent.change(screen.getByLabelText('Первый день'), { target: { value: '2026-10-25' } })
-    fireEvent.change(screen.getByLabelText('Последний день (включительно)'), { target: { value: '2026-10-26' } })
+    changeField(screen.getByLabelText('Первый день'), { target: { value: '2026-10-25' } })
+    changeField(screen.getByLabelText('Последний день (включительно)'), { target: { value: '2026-10-26' } })
     fireEvent.click(screen.getByRole('button', { name: 'Создать мероприятие' }))
     await screen.findByText(/Мероприятие «Поездка» сохранено/)
-    expect(button).toHaveFocus()
+    await waitFor(() => expect(button).toHaveFocus())
     const call = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST')!
     expect(JSON.parse(call[1].body)).toMatchObject({ title: 'Поездка', schedule: { type: 'allDay', startDate: '2026-10-25', endDate: '2026-10-27' } })
     expect(JSON.parse(call[1].body)).not.toHaveProperty('userId')

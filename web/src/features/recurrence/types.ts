@@ -4,7 +4,7 @@ export type Kind = 'task' | 'event'
 export type Schedule = TaskSchedule | EventSchedule
 export const weekDays = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'] as const
 export type WeekDay = typeof weekDays[number]
-export interface Rule { frequency: 'daily' | 'weekly'; interval: number; weekDays?: WeekDay[]; timeZone?: string; end: { type: 'never' } | { type: 'until'; date: string } | { type: 'count'; count: number } }
+export interface Rule { frequency: 'daily' | 'weekly' | 'monthly' | 'yearly'; interval: number; weekDays?: WeekDay[]; timeZone?: string; end: { type: 'never' } | { type: 'until'; date: string } | { type: 'count'; count: number } }
 export interface Content { title: string; description: string; location?: string; link?: string; schedule: Schedule }
 export interface Definition extends Content { recurrence: Rule }
 export interface Series extends Definition { kind: Kind; id: string; revision: number; createdAt: string; updatedAt: string }

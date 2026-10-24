@@ -1,5 +1,6 @@
+import { DateTimeField } from '../../shared/ui/DateTimeField'
 import { createSeries } from '../recurrence/api'
-import { RuleFields } from '../recurrence/RuleFields'
+import { RepeatPicker } from '../recurrence/RepeatPicker'
 import { ruleDraft, validateRule } from '../recurrence/rule'
 import type { Series } from '../recurrence/types'
 import { useCalendarPreferences } from '../../shared/calendar/preferences'
@@ -100,11 +101,15 @@ export function EventDialog({ event, initialDate, timeZone, csrfToken, fallbackF
   function field(name: Exclude<keyof EventDraft, 'allDay'>, label: string, type = 'text', maxLength?: number) {
     return <div className="min-w-0">
       <label className="mb-1 block text-sm font-medium" htmlFor={`event-${name}`}>{label}</label>
-      <input className="planly-input w-full min-w-0" id={`event-${name}`} name={name} type={type} value={draft[name]} maxLength={maxLength}
-        step={type === 'datetime-local' ? 60 : undefined}
+      {type === 'date' || type === 'datetime-local' ? <DateTimeField
+        id={`event-${name}`} name={name} label={label} timed={type === 'datetime-local'}
+        timeZone={repeating ? rule.zone.trim() : timeZone} value={draft[name]} disabled={busy}
+        invalid={Boolean(errors[name])} describedBy={errors[name] ? `event-error-${name}` : undefined}
+        onChange={value => update(name, value)}
+      /> : <input className="planly-input w-full min-w-0" id={`event-${name}`} name={name} type={type} value={draft[name]} maxLength={maxLength}
         data-autofocus={name === 'title' ? true : undefined} disabled={busy}
         aria-invalid={Boolean(errors[name])} aria-describedby={errors[name] ? `event-error-${name}` : undefined}
-        onChange={(e) => update(name, e.target.value)} />
+        onChange={(e) => update(name, e.target.value)} />}
       {errors[name] && <p className="mt-1 text-sm text-[var(--color-danger)]" id={`event-error-${name}`}>{errors[name]}</p>}
     </div>
   }
@@ -147,7 +152,7 @@ export function EventDialog({ event, initialDate, timeZone, csrfToken, fallbackF
         <textarea className="planly-input w-full" rows={3} id="event-description" name="description" value={draft.description} disabled={busy} aria-invalid={Boolean(errors.description)} aria-describedby={errors.description ? 'event-error-description' : undefined} onChange={(e) => update('description', e.target.value)} />
         {errors.description && <p id="event-error-description" className="mt-1 text-sm text-[var(--color-danger)]">{errors.description}</p>}
       </div>
-      {!confirmed&&<><label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm font-medium"><input type="checkbox" checked={repeating} disabled={busy} onChange={e=>{setRepeating(e.target.checked);setRuleErrors({})}}/>Повторять</label>{repeating&&<RuleFields value={rule} onChange={setRule} timed={!draft.allDay} anchor={draft.allDay?draft.startDate:draft.start} errors={ruleErrors} disabled={busy}/>}</>}
+      {!confirmed&&<RepeatPicker value={rule} onChange={setRule} enabled={repeating} onEnabledChange={value=>{setRepeating(value);setRuleErrors({})}} timed={!draft.allDay} anchor={draft.allDay?draft.startDate:draft.start} errors={ruleErrors} disabled={busy}/>}
       <div className="grid gap-2 sm:grid-cols-2">
         <button type="button" className="planly-button-secondary" disabled={busy} onClick={() => confirmed ? setMode('details') : onClose()}>Отмена</button>
         <button type="submit" className="planly-button-primary" disabled={busy}>{busy ? 'Сохраняем…' : confirmed ? 'Сохранить' : repeating ? 'Создать серию мероприятий' : 'Создать мероприятие'}</button>

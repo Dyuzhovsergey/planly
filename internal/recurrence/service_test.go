@@ -256,7 +256,7 @@ func TestEventOverlapBoundariesAndLargeDurations(t *testing.T) {
 }
 func TestValidationAndOutputLimit(t *testing.T) {
 	ctx := context.Background()
-	for _, edit := range []func(*Definition){func(d *Definition) { d.Recurrence.Interval = 0 }, func(d *Definition) { d.Recurrence.Frequency = "monthly" }, func(d *Definition) { d.Schedule.Date = "2026-02-29" }, func(d *Definition) { d.Title = " " }, func(d *Definition) { d.Recurrence.End = Ending{Type: "count", Count: 0} }, func(d *Definition) { d.Recurrence.TimeZone = "Local" }, func(d *Definition) {
+	for _, edit := range []func(*Definition){func(d *Definition) { d.Recurrence.Interval = 0 }, func(d *Definition) { d.Recurrence.Frequency = "hourly" }, func(d *Definition) { d.Schedule.Date = "2026-02-29" }, func(d *Definition) { d.Title = " " }, func(d *Definition) { d.Recurrence.End = Ending{Type: "count", Count: 0} }, func(d *Definition) { d.Recurrence.TimeZone = "Local" }, func(d *Definition) {
 		d.Recurrence = Rule{Frequency: "weekly", Interval: 1, WeekDays: []string{"tuesday"}, End: Ending{Type: "never"}}
 	}} {
 		d := taskDefinition("2026-10-26")

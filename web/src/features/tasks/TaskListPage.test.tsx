@@ -1,3 +1,4 @@
+import { changeField } from '../../shared/ui/date-time-testing'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, useLocation, useNavigate } from 'react-router'
 import { Temporal } from 'temporal-polyfill'
@@ -189,7 +190,7 @@ describe('TaskListPage', () => {
     expect(screen.getByLabelText('Название')).toHaveFocus()
     fireEvent.change(screen.getByLabelText('Название'), { target: { value: createdTask.title } })
     fireEvent.click(screen.getByLabelText('Весь день'))
-    fireEvent.change(screen.getByLabelText('Дата'), { target: { value: '2026-10-25' } })
+    changeField(screen.getByLabelText('Дата'), { target: { value: '2026-10-25' } })
     fireEvent.click(screen.getByRole('button', { name: 'Создать задачу' }))
 
     expect(await screen.findByText(`Задача «${createdTask.title}» создана.`)).toBeInTheDocument()
@@ -223,7 +224,7 @@ describe('TaskListPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Добавить задачу' }))
     fireEvent.change(screen.getByLabelText('Название'), { target: { value: nextMonthTask.title } })
     fireEvent.click(screen.getByLabelText('Весь день'))
-    fireEvent.change(screen.getByLabelText('Дата'), { target: { value: '2026-11-02' } })
+    changeField(screen.getByLabelText('Дата'), { target: { value: '2026-11-02' } })
     fireEvent.click(screen.getByRole('button', { name: 'Создать задачу' }))
 
     expect(await screen.findByText(/создана вне выбранного месяца/)).toBeInTheDocument()
@@ -242,7 +243,7 @@ describe('TaskListPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Добавить задачу' }))
     fireEvent.change(screen.getByLabelText('Название'), { target: { value: createdTask.title } })
     fireEvent.click(screen.getByLabelText('Весь день'))
-    fireEvent.change(screen.getByLabelText('Дата'), { target: { value: '2026-10-25' } })
+    changeField(screen.getByLabelText('Дата'), { target: { value: '2026-10-25' } })
     fireEvent.click(screen.getByRole('button', { name: 'Создать задачу' }))
 
     expect(await screen.findByText(/скрыта фильтром «Завершённые»/)).toBeInTheDocument()

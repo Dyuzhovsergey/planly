@@ -191,16 +191,16 @@ function AuthenticatedAppShell() {
     <main className="min-h-dvh bg-[var(--color-canvas)] text-[var(--color-ink)]">
       <a className="planly-skip-link" href="#planly-workspace">Перейти к основному содержимому</a>
       <div className="mx-auto grid min-h-dvh max-w-[1720px] lg:grid-cols-[14rem_minmax(0,1fr)]">
-        <aside className="hidden border-r border-[var(--color-border)] bg-[var(--color-sidebar)] px-5 py-6 lg:flex lg:flex-col" aria-label="Основная навигация">
-          <PlanlyLogo showTagline />
-          <nav className="mt-10 space-y-1" aria-label="Разделы приложения">
+        <aside className="hidden border-r border-[var(--color-border)] bg-[var(--color-sidebar)] px-5 py-6 lg:sticky lg:top-0 lg:flex lg:h-dvh lg:self-start lg:flex-col" aria-label="Основная навигация">
+          <div className="shrink-0"><PlanlyLogo showTagline /></div>
+          <nav className="mt-10 min-h-0 flex-1 space-y-1 overflow-y-auto pb-4" aria-label="Разделы приложения">
             <AppNavigationLink to="/app" label="Календарь" icon={<CalendarIcon className="size-4" />} />
             <AppNavigationLink to="/tasks" label="Задачи" icon={<TasksIcon className="size-4" />} />
             <AppNavigationLink to="/events" label="Мероприятия" icon={<EventIcon className="size-4" />} />
             <AppNavigationLink to="/birthdays" label="Дни рождения" icon={<BirthdayIcon className="size-4" />} />
             <div className="col-start-4"><AppNavigationLink to="/settings" label="Настройки" icon={<SettingsIcon className="size-4" />} /></div>
           </nav>
-          <div className="mt-auto rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+          <div className="mt-auto shrink-0 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
             <p className="text-xs font-medium uppercase tracking-[0.12em] text-[var(--color-muted)]">Аккаунт</p>
             <Link to="/settings" aria-label="Настройки профиля" className="mt-2 flex min-h-11 min-w-0 items-center gap-2 rounded-lg font-semibold focus-visible:outline-2 focus-visible:outline-[var(--color-focus)]"><UserAvatar name={state.user.displayName || state.user.username} src={state.user.avatarUrl} /><span className="truncate" title={state.user.displayName || state.user.username}>{state.user.displayName || state.user.username}</span></Link>
             <button className="mt-3 flex min-h-11 w-full cursor-pointer items-center gap-2 rounded-xl px-2 text-sm font-semibold text-[var(--color-muted)] transition-colors hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-ink)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)] disabled:cursor-not-allowed disabled:opacity-60" type="button" disabled={isLoggingOut} onClick={handleLogout}>
@@ -210,7 +210,7 @@ function AuthenticatedAppShell() {
         </aside>
 
         <div className="min-w-0">
-          <header className="flex items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-sidebar)] px-4 py-3 lg:hidden">
+          <header className="sticky top-0 z-30 flex items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-sidebar)] px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] lg:hidden">
             <PlanlyLogo compact />
             <div className="flex items-center gap-1"><Link to="/settings" aria-label="Настройки профиля" className="grid size-11 place-items-center rounded-xl text-[var(--color-muted)] hover:text-[var(--color-ink)] focus-visible:outline-2 focus-visible:outline-[var(--color-focus)]"><UserAvatar name={state.user.displayName || state.user.username} src={state.user.avatarUrl} className="size-8 text-sm" /></Link>
             <button className="grid size-11 cursor-pointer place-items-center rounded-xl text-[var(--color-muted)] hover:bg-[var(--color-surface-muted)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]" type="button" aria-label="Выйти из мобильного интерфейса" disabled={isLoggingOut} onClick={handleLogout}><LogOutIcon /></button></div>

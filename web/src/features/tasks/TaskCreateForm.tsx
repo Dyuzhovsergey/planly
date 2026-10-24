@@ -1,5 +1,6 @@
+import { DateTimeField } from '../../shared/ui/DateTimeField'
 import { createSeries } from '../recurrence/api'
-import { RuleFields } from '../recurrence/RuleFields'
+import { RepeatPicker } from '../recurrence/RepeatPicker'
 import { ruleDraft, validateRule } from '../recurrence/rule'
 import type { Series } from '../recurrence/types'
 import { useCalendarPreferences } from '../../shared/calendar/preferences'
@@ -59,8 +60,8 @@ export function TaskCreateForm({
   const [fieldToFocus, setFieldToFocus] = useState<keyof FieldErrors | null>(null)
   const titleInput = useRef<HTMLInputElement>(null)
   const descriptionInput = useRef<HTMLTextAreaElement>(null)
-  const scheduledAtInput = useRef<HTMLInputElement>(null)
-  const scheduledDateInput = useRef<HTMLInputElement>(null)
+  const scheduledAtInput = useRef<HTMLFieldSetElement>(null)
+  const scheduledDateInput = useRef<HTMLFieldSetElement>(null)
 
   useEffect(() => {
     if (autoFocus) {
@@ -319,21 +320,21 @@ export function TaskCreateForm({
             >
               Дата и время
             </label>
-            <input
-              ref={scheduledAtInput}
-              className={inputClassName}
+            <DateTimeField
+              inputRef={scheduledAtInput}
               id="task-scheduled-at"
               name="scheduledAt"
-              type="datetime-local"
-              step="60"
+              label="Дата и время"
+              timeZone={repeating ? rule.zone.trim() : timeZone}
               required
               disabled={isSubmitting}
               value={scheduledAt}
-              aria-invalid={Boolean(fieldErrors.scheduledAt)}
-              aria-describedby={
+              invalid={Boolean(fieldErrors.scheduledAt)}
+              describedBy={
                 `task-zone-hint${fieldErrors.scheduledAt ? ' task-scheduled-at-error' : ''}`
               }
-              onChange={(event) => setScheduledAt(event.target.value)}
+              onChange={setScheduledAt}
+              onModeChange={(_, value) => { setScheduledDate(value); setScheduleType('allDay'); setFieldErrors({}) }}
             />
             <p id="task-zone-hint" className="mt-2 text-xs text-[var(--color-muted)]">Время в зоне {repeating ? rule.zone.trim() : timeZone}. При повторе времени выбирается первое вхождение.</p>
             {fieldErrors.scheduledAt && (
@@ -354,20 +355,21 @@ export function TaskCreateForm({
             >
               Дата
             </label>
-            <input
-              ref={scheduledDateInput}
-              className={inputClassName}
+            <DateTimeField
+              inputRef={scheduledDateInput}
               id="task-scheduled-date"
               name="scheduledDate"
-              type="date"
+              label="Дата" timed={false}
+              timeZone={repeating ? rule.zone.trim() : timeZone}
               required
               disabled={isSubmitting}
               value={scheduledDate}
-              aria-invalid={Boolean(fieldErrors.scheduledDate)}
-              aria-describedby={
+              invalid={Boolean(fieldErrors.scheduledDate)}
+              describedBy={
                 fieldErrors.scheduledDate ? 'task-scheduled-date-error' : undefined
               }
-              onChange={(event) => setScheduledDate(event.target.value)}
+              onChange={setScheduledDate}
+              onModeChange={(_, value) => { setScheduledAt(value); setScheduleType('timed'); setFieldErrors({}) }}
             />
             {fieldErrors.scheduledDate && (
               <p
@@ -381,8 +383,7 @@ export function TaskCreateForm({
           </div>
         )}
 
-        <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm font-medium"><input type="checkbox" checked={repeating} disabled={isSubmitting} onChange={e=>{setRepeating(e.target.checked);setRuleErrors({})}}/>Повторять</label>
-        {repeating && <RuleFields value={rule} onChange={setRule} timed={scheduleType==='timed'} anchor={scheduleType==='timed'?scheduledAt:scheduledDate} errors={ruleErrors} disabled={isSubmitting}/>}
+        <RepeatPicker value={rule} onChange={setRule} enabled={repeating} onEnabledChange={value=>{setRepeating(value);setRuleErrors({})}} timed={scheduleType==='timed'} anchor={scheduleType==='timed'?scheduledAt:scheduledDate} errors={ruleErrors} disabled={isSubmitting}/>
         {seriesCreated && <p role="status" className="text-sm text-[var(--color-accent-strong)]">Серия задач создана.</p>}
         {formError && (
           <p className="rounded-lg bg-[var(--color-danger-soft)] p-3 text-sm text-[var(--color-danger)]" role="alert">

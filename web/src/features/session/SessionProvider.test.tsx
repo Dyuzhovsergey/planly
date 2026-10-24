@@ -1,3 +1,4 @@
+import { changeField } from '../../shared/ui/date-time-testing'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, useLocation } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -400,7 +401,7 @@ describe('session restoration', () => {
       password: 'correct horse battery staple',
       timeZone: 'Europe/Moscow',
     })
-    expect(screen.queryByText(/Часовая зона/)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/Часовая зона/)).not.toBeInTheDocument()
   })
 
   it('shows an email conflict next to email and focuses it', async () => {
@@ -523,10 +524,8 @@ describe('session restoration', () => {
     fireEvent.change(screen.getByLabelText('Название'), {
       target: { value: 'Позвонить врачу' },
     })
-    fireEvent.change(
-      screen.getByLabelText('Дата и время', {
-        selector: 'input[type="datetime-local"]',
-      }),
+    changeField(
+      screen.getByRole('group', { name: 'Дата и время' }),
       { target: { value: '2026-10-20T18:30' } },
     )
     fireEvent.click(screen.getByRole('button', { name: 'Создать задачу' }))

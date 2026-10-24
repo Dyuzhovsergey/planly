@@ -177,6 +177,35 @@ func TestRecurrenceRepositoryIntegration(t *testing.T) {
 	if err := tx.QueryRow(ctx, `SELECT revision FROM recurrence_upgrade_series WHERE user_id=$1`, owner).Scan(&initial); err != nil || initial != 1 {
 		t.Fatal("upgrade defaults", initial, err)
 	}
+
+	// Upgrade the populated 010 schema with the exact 011 SQL, preserving its rows.
+	extension, err := migrations.FS.ReadFile("011_calendar_recurrence.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	upgrade := strings.Split(string(extension), "---- create above / drop below ----")[0]
+	upgrade = strings.ReplaceAll(upgrade, "recurrence_series", "recurrence_upgrade_series")
+	if _, err := tx.Exec(ctx, upgrade); err != nil {
+		t.Fatal("011 upgrade", err)
+	}
+	for _, frequency := range []string{"monthly", "yearly"} {
+		if _, err := tx.Exec(ctx, `INSERT INTO recurrence_upgrade_series(user_id,kind,definition) SELECT user_id,kind,jsonb_set(definition,'{recurrence,frequency}',to_jsonb($2::text)) FROM recurrence_series WHERE id=$1`, series.ID, frequency); err != nil {
+			t.Fatal(frequency, err)
+		}
+	}
+	var upgraded int
+	if err := tx.QueryRow(ctx, `SELECT count(*) FROM recurrence_upgrade_series WHERE user_id=$1`, owner).Scan(&upgraded); err != nil || upgraded != 3 {
+		t.Fatal("011 preservation", upgraded, err)
+	}
+	if _, err := tx.Exec(ctx, "SAVEPOINT invalid_rule"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `UPDATE recurrence_upgrade_series SET definition=jsonb_set(definition,'{recurrence,frequency}','"hourly"')`); err == nil {
+		t.Fatal("011 accepted unsupported frequency")
+	}
+	if _, err := tx.Exec(ctx, "ROLLBACK TO SAVEPOINT invalid_rule"); err != nil {
+		t.Fatal(err)
+	}
 	if err := tx.Rollback(ctx); err != nil {
 		t.Fatal(err)
 	}

@@ -1,6 +1,6 @@
 import { Temporal } from 'temporal-polyfill'
 import { weekDays, type Rule, type Schedule, type WeekDay } from './types'
-export interface RuleDraft {frequency:'daily'|'weekly';interval:string;weekDays:WeekDay[];zone:string;end:'never'|'until'|'count';until:string;count:string}
+export interface RuleDraft {frequency:Rule['frequency'];interval:string;weekDays:WeekDay[];zone:string;end:'never'|'until'|'count';until:string;count:string}
 export function ruleDraft(zone:string,rule?:Rule):RuleDraft{return {frequency:rule?.frequency??'daily',interval:String(rule?.interval??1),weekDays:rule?.weekDays??[],zone:rule?.timeZone??zone,end:rule?.end.type??'never',until:rule?.end.type==='until'?rule.end.date:'',count:String(rule?.end.type==='count'?rule.end.count:10)}}
 export function anchorDate(schedule:Schedule,zone:string):string{if(schedule.type==='allDay')return 'date'in schedule?schedule.date:schedule.startDate;return Temporal.Instant.from('at'in schedule?schedule.at:schedule.start).toZonedDateTimeISO(zone).toPlainDate().toString()}
 export function validateRule(draft:RuleDraft,schedule:Schedule):{rule?:Rule;errors:Record<string,string>}{
@@ -19,5 +19,5 @@ export function ruleSummary(rule:Rule):string{
  const labels=['Пн','Вт','Ср','Чт','Пт','Сб','Вс']
  const days=rule.weekDays?.map(day=>labels[weekDays.indexOf(day)]).join(', ')
  const end=rule.end.type==='never'?'без окончания':rule.end.type==='count'?`${rule.end.count} повторений`:`до ${Temporal.PlainDate.from(rule.end.date).toLocaleString('ru-RU')} включительно`
- return `Каждые ${rule.interval} ${rule.frequency==='daily'?'дн.':'нед.'}${days?' · '+days:''} · ${end}${rule.timeZone?' · зона серии '+rule.timeZone:''}`
+ return `Каждые ${rule.interval} ${({daily:'дн.',weekly:'нед.',monthly:'мес.',yearly:'г.'}[rule.frequency])}${days?' · '+days:''} · ${end}${rule.timeZone?' · зона серии '+rule.timeZone:''}`
 }
