@@ -405,7 +405,7 @@ describe('TaskListPage', () => {
     const dataTransfer = dragDataTransfer()
 
     fireEvent.dragStart(
-      within(activeColumn).getByRole('button', { name: 'Перетащить задачу Позвонить врачу' }),
+      within(activeColumn).getByText('Позвонить врачу').closest('li')!,
       { dataTransfer },
     )
     fireEvent.dragOver(completedColumn, { dataTransfer })
@@ -432,7 +432,7 @@ describe('TaskListPage', () => {
     const dataTransfer = dragDataTransfer()
 
     fireEvent.dragStart(
-      within(activeColumn).getByRole('button', { name: 'Перетащить задачу Позвонить врачу' }),
+      within(activeColumn).getByText('Позвонить врачу').closest('li')!,
       { dataTransfer },
     )
     fireEvent.dragOver(completedColumn, { dataTransfer })

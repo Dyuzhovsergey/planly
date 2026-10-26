@@ -251,10 +251,11 @@ export function TaskListPage({
       <section className="planly-card min-w-0 p-4 sm:p-6" aria-labelledby="task-list-heading">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <h1 className="min-w-0 text-2xl font-semibold tracking-tight text-[var(--color-ink)]" id="task-list-heading">
+            <p className="planly-eyebrow">Дела и планы</p>
+            <h1 className="mt-1 text-2xl font-semibold" id="task-list-heading">
               Задачи
             </h1>
-            <p className="mt-1 text-sm font-semibold text-[var(--color-muted)]" aria-live="polite">{visibleYear}</p>
+            <p className="mt-1 text-sm text-[var(--color-muted)]" aria-live="polite">{visibleYear}</p>
           </div>
           <button
             ref={createButtonRef}
@@ -270,7 +271,8 @@ export function TaskListPage({
           </button>
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center justify-end gap-2" aria-label="Выбор месяца">
+        <div className="my-5 flex flex-wrap items-center justify-between gap-3" aria-label="Выбор месяца">
+          <div className="flex items-center gap-3">
             <button
               className="planly-button-secondary size-11 p-0"
               type="button"
@@ -280,7 +282,7 @@ export function TaskListPage({
             >
               <ChevronLeftIcon className="size-4" />
             </button>
-            <span className="min-w-24 text-center text-lg font-semibold" aria-live="polite">{visibleMonth}</span>
+            <h2 className="min-w-24 text-center font-semibold" aria-live="polite">{visibleMonth}</h2>
             <button
               className="planly-button-secondary size-11 p-0"
               type="button"
@@ -290,6 +292,7 @@ export function TaskListPage({
             >
               <ChevronRightIcon className="size-4" />
             </button>
+          </div>
             <button
               className="planly-button-secondary"
               type="button"
@@ -300,7 +303,7 @@ export function TaskListPage({
             </button>
         </div>
 
-        <div className="mt-6">
+        <div className="mb-5">
           <label className="block text-sm font-medium text-[var(--color-ink)]" htmlFor="task-search">Поиск задач</label>
           <div className="relative mt-2">
             <input

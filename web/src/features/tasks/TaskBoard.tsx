@@ -1,10 +1,9 @@
 import { useCalendarPreferences } from '../../shared/calendar/preferences'
-import { useState, type DragEvent } from 'react'
+import { useRef, useState, type DragEvent } from 'react'
 
 import {
   CheckIcon,
   ClockIcon,
-  DragHandleIcon,
   PencilIcon,
   TasksIcon,
   TrashIcon,
@@ -64,6 +63,8 @@ export function TaskBoard({
 }: TaskBoardProps) {
   const { timeFormat } = useCalendarPreferences()
 
+  const dragPreview = useRef<HTMLDivElement>(null)
+  const suppressDragClick = useRef(false)
   const [draggedTaskID, setDraggedTaskID] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<BoardStatus | null>(null)
   const visibleColumns = statusFilter === 'all'
@@ -71,14 +72,19 @@ export function TaskBoard({
     : columns.filter((column) => column.status === statusFilter)
   const canDragBetweenColumns = statusFilter === 'all'
 
-  function handleDragStart(event: DragEvent<HTMLButtonElement>, task: Task) {
+  function handleDragStart(event: DragEvent<HTMLLIElement>, task: Task) {
     if (!canDragBetweenColumns || pendingTaskID) {
       event.preventDefault()
       return
     }
 
+    suppressDragClick.current = true
     event.dataTransfer.effectAllowed = 'move'
     event.dataTransfer.setData('text/plain', task.id)
+    if (dragPreview.current && event.dataTransfer.setDragImage) {
+      dragPreview.current.textContent = task.title
+      event.dataTransfer.setDragImage(dragPreview.current, 16, 16)
+    }
     setDraggedTaskID(task.id)
   }
 
@@ -104,11 +110,12 @@ export function TaskBoard({
     <div aria-label="Доска задач">
       {canDragBetweenColumns && (
         <p className="mb-4 text-sm leading-6 text-[var(--color-muted)]">
-          Перетащите плитку между колонками, чтобы изменить статус. Кнопка внутри плитки выполняет то же действие без перетаскивания.
+          Зажмите плитку и отпустите в любом месте другого столбца — «Активные» или «Завершённые». Кнопка внутри плитки выполняет то же действие без перетаскивания.
         </p>
       )}
 
-      <div className={`grid items-start gap-4 ${visibleColumns.length > 1 ? 'lg:grid-cols-2' : ''}`}>
+      <div ref={dragPreview} aria-hidden="true" className="pointer-events-none fixed -left-[10000px] top-0 max-w-64 truncate rounded-xl border border-[var(--color-accent)] bg-[var(--color-surface)] px-4 py-3 text-sm font-semibold text-[var(--color-ink)] shadow-xl" />
+      <div className={`grid items-stretch gap-4 ${visibleColumns.length > 1 ? 'lg:grid-cols-2' : ''}`}>
         {visibleColumns.map((column) => {
           const columnTasks = tasks.filter((task) => task.completed === column.completed)
           const isDropTarget = dropTarget === column.status
@@ -118,7 +125,7 @@ export function TaskBoard({
 
           return (
             <section
-              className={`planly-task-column ${isDropTarget && acceptsDraggedTask ? 'planly-task-column--over' : ''}`}
+              className={`planly-task-column flex min-h-72 flex-col ${isDropTarget && acceptsDraggedTask ? 'planly-task-column--over' : ''}`}
               aria-labelledby={`task-column-${column.status}`}
               key={column.status}
               onDragOver={(event) => {
@@ -126,6 +133,11 @@ export function TaskBoard({
                 event.preventDefault()
                 event.dataTransfer.dropEffect = 'move'
                 setDropTarget(column.status)
+              }}
+              onDragLeave={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                  setDropTarget(current => current === column.status ? null : current)
+                }
               }}
               onDrop={(event) => handleDrop(event, column)}
             >
@@ -148,7 +160,7 @@ export function TaskBoard({
                 </span>
               </header>
 
-              <ul className="min-h-36 space-y-3 p-3 sm:p-4" aria-label={`${column.label} задачи`}>
+              <ul className="min-h-36 flex-1 space-y-3 p-3 sm:p-4" aria-label={`${column.label} задачи`}>
                 {columnTasks.map((task) => {
                   const Icon = task.completed ? CheckIcon : ClockIcon
                   const isDragging = draggedTaskID === task.id
@@ -156,8 +168,18 @@ export function TaskBoard({
 
                   return (
                     <li
-                      className={`planly-task-tile ${isDragging ? 'planly-task-tile--dragging' : ''} ${task.completed ? 'planly-task-tile--completed' : ''}`}
+                      className={`planly-task-tile ${canDragBetweenColumns && !pendingTaskID ? 'cursor-grab active:cursor-grabbing' : ''} ${isDragging ? 'planly-task-tile--dragging' : ''} ${task.completed ? 'planly-task-tile--completed' : ''}`}
                       key={task.id}
+                      draggable={canDragBetweenColumns && !pendingTaskID}
+                      onDragStart={(event) => handleDragStart(event, task)}
+                      onDragEnd={finishDrag}
+                      onPointerDownCapture={() => { suppressDragClick.current = false }}
+                      onKeyDownCapture={() => { suppressDragClick.current = false }}
+                      onClickCapture={(event) => {
+                        // A finished drag must not accidentally activate a tile action.
+                        // A new pointer or keyboard gesture restores ordinary clicks.
+                        if (suppressDragClick.current) { event.preventDefault(); event.stopPropagation() }
+                      }}
                     >
                       <div className="flex items-start gap-3">
                         <span className={`mt-0.5 grid size-9 shrink-0 place-items-center rounded-xl ${task.completed
@@ -181,20 +203,7 @@ export function TaskBoard({
                             </span>
                           )}
                         </button>
-                        {canDragBetweenColumns && (
-                          <button
-                            className="planly-task-drag-handle"
-                            type="button"
-                            draggable={!pendingTaskID}
-                            disabled={Boolean(pendingTaskID)}
-                            aria-label={`Перетащить задачу ${task.title}`}
-                            title="Перетащить"
-                            onDragStart={(event) => handleDragStart(event, task)}
-                            onDragEnd={finishDrag}
-                          >
-                            <DragHandleIcon className="size-5" />
-                          </button>
-                        )}
+
                       </div>
 
                       <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-[var(--color-muted)]">

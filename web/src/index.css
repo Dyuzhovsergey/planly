@@ -525,9 +525,9 @@
   }
 
   .planly-task-tile--dragging {
-    opacity: 0.45;
-    box-shadow: 0 14px 28px rgb(0 0 0 / 28%);
-    transform: rotate(1deg) scale(0.985);
+    opacity: 0.3;
+    border-style: dashed;
+    box-shadow: none;
   }
 
   .planly-task-drag-handle {
