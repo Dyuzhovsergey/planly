@@ -1,3 +1,4 @@
+import { SelectField } from '../../shared/ui/SelectField'
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { AvatarSettings } from './AvatarSettings'
 import type { AvatarChange } from './avatar'
@@ -76,8 +77,7 @@ export function SettingsPage({ user, onSave, onAuthenticationRequired, onClose, 
         <h2 className="text-lg font-semibold">Календарь</h2>
         <div>
           <label htmlFor="settings-zone" className="mb-2 block text-sm font-medium">Часовая зона</label>
-          <input id="settings-zone" name="timeZone" list="settings-zones" className="planly-input w-full" value={draft.timeZone} aria-invalid={Boolean(errors.timeZone)} aria-describedby={`settings-zone-hint${errors.timeZone ? ' settings-zone-error' : ''}`} onChange={(e) => update('timeZone', e.target.value)} autoComplete="off" />
-          <datalist id="settings-zones">{zones.map((zone) => <option key={zone} value={zone} />)}</datalist>
+          <SelectField id="settings-zone" name="timeZone" label="Часовая зона" editable value={draft.timeZone} invalid={Boolean(errors.timeZone)} describedBy={`settings-zone-hint${errors.timeZone ? ' settings-zone-error' : ''}`} onValueChange={value => update('timeZone',value)} options={zones.map(zone=>({value:zone,label:zone}))} />
           <p id="settings-zone-hint" className="mt-2 text-xs leading-5 text-[var(--color-muted)]">Начните вводить город или зону, например Europe/Moscow. Время задач и мероприятий будет показано в выбранной зоне; даты записей на весь день и дней рождения не сдвигаются.</p>
           {errors.timeZone && <p id="settings-zone-error" className="mt-2 text-sm text-[var(--color-danger)]">{errors.timeZone}</p>}
         </div>

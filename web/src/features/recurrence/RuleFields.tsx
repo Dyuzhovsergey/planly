@@ -1,3 +1,4 @@
+import { SelectField } from '../../shared/ui/SelectField'
 import { useId } from 'react'
 import { DateTimeField } from '../../shared/ui/DateTimeField'
 import { Temporal } from 'temporal-polyfill'
@@ -33,14 +34,14 @@ export function RuleFields({ value, onChange, timed, anchor, errors = {} }: {
     <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,2fr)] items-end gap-3">
       {input('interval', 'Раз в', 'number', 'recurrence.interval')}
       <div><label htmlFor={`${id}-unit`} className="mb-1 block text-sm font-medium">Период</label>
-        <select id={`${id}-unit`} className="planly-input w-full" value={value.frequency} onChange={e => {
-          const frequency = e.target.value as RuleDraft['frequency']
+        <SelectField id={`${id}-unit`} label="Период" value={value.frequency} onValueChange={next => {
+          const frequency = next as RuleDraft['frequency']
           let days = value.weekDays
           if (frequency === 'weekly' && !days.length) {
             try { days = [weekDays[Temporal.PlainDate.from(anchor.slice(0, 10)).dayOfWeek - 1]] } catch { days = ['monday'] }
           }
           onChange({ ...value, frequency, weekDays: days })
-        }}><option value="daily">Дни</option><option value="weekly">Недели</option><option value="monthly">Месяцы</option><option value="yearly">Годы</option></select>
+        }} options={[{value:'daily',label:'Дни'},{value:'weekly',label:'Недели'},{value:'monthly',label:'Месяцы'},{value:'yearly',label:'Годы'}]} />
       </div>
     </div>
     {value.frequency === 'weekly' && <fieldset>

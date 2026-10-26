@@ -54,11 +54,23 @@ describe('event dates and adapters', () => {
   })
   it('canonicalizes month/query while preserving unrelated parameters', () => {
     const params = new URLSearchParams('month=2028-02&q=место&source=link')
-    expect(eventURLState(params, 'UTC')).toEqual({ month: '2028-02', q: 'место' })
+    expect(eventURLState(params, 'UTC')).toEqual({ month: '2028-02', q: 'место', status:'upcoming' })
     expect(eventMonthRange('2028-02')).toEqual({ from: '2028-02-01', to: '2028-03-01' })
     const cleared = eventSearchParams(params, '2028-03', '')
     expect(cleared.get('source')).toBe('link')
     expect(cleared.has('q')).toBe(false)
     expect(eventURLState(new URLSearchParams('month=0000-13'), 'UTC').month).toMatch(/^\d{4}-\d{2}$/)
   })
+})
+
+it('classifies ongoing, exact end and all-day zone boundaries',async()=>{
+ const {eventIsPast}=await import('./event-utils')
+ const base={id:'x',title:'x',description:'',location:'',link:'',createdAt:'',updatedAt:''}
+ const timed={...base,schedule:{type:'timed' as const,start:'2026-10-26T08:00:00Z',end:'2026-10-26T09:00:00Z'}}
+ expect(eventIsPast(timed,'Europe/Moscow',Date.parse('2026-10-26T08:59:59Z'))).toBe(false)
+ expect(eventIsPast(timed,'Europe/Moscow',Date.parse('2026-10-26T09:00:00Z'))).toBe(true)
+ const allDay={...base,schedule:{type:'allDay' as const,startDate:'2026-10-25',endDate:'2026-10-27'}}
+ expect(eventIsPast(allDay,'Europe/Moscow',Date.parse('2026-10-26T20:59:59Z'))).toBe(false)
+ expect(eventIsPast(allDay,'Europe/Moscow',Date.parse('2026-10-26T21:00:00Z'))).toBe(true)
+ expect(eventIsPast(allDay,'America/New_York',Date.parse('2026-10-26T21:00:00Z'))).toBe(false)
 })

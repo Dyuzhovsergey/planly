@@ -7,7 +7,7 @@ import { LoginForm } from '../features/session/LoginForm'
 import { RegistrationForm } from '../features/session/RegistrationForm'
 import { useSession } from '../features/session/session-context'
 import type { LoginCredentials, RegistrationInput } from '../features/session/types'
-import { BirthdayIcon, CalendarIcon, EventIcon, LogOutIcon, SettingsIcon, TasksIcon } from '../shared/ui/icons'
+import { NotesIcon, BirthdayIcon, CalendarIcon, EventIcon, LogOutIcon, SettingsIcon, TasksIcon } from '../shared/ui/icons'
 import { PlanlyLogo } from '../shared/ui/PlanlyLogo'
 
 const TaskCalendarDashboard = lazy(() =>
@@ -28,6 +28,8 @@ const BirthdayListPage = lazy(() => import('../features/birthdays/BirthdayListPa
 
 const SettingsPage = lazy(() => import('../features/settings/SettingsPage').then((module) => ({ default: module.SettingsPage })))
 
+const NoteListPage = lazy(() => import('../features/notes/NoteListPage').then(module => ({default:module.NoteListPage})))
+
 type AuthMode = 'login' | 'registration'
 
 export function App() {
@@ -41,6 +43,7 @@ export function App() {
         <Route path="/tasks" element={<TaskListScreen />} />
         <Route path="/events" element={<EventListScreen />} />
         <Route path="/birthdays" element={<BirthdayListScreen />} />
+        <Route path="/notes" element={<NotesScreen />} />
         <Route path="/settings" element={<SettingsScreen />} />
       </Route>
       <Route path="*" element={<SessionEntryRoute />} />
@@ -198,7 +201,8 @@ function AuthenticatedAppShell() {
             <AppNavigationLink to="/tasks" label="Задачи" icon={<TasksIcon className="size-4" />} />
             <AppNavigationLink to="/events" label="Мероприятия" icon={<EventIcon className="size-4" />} />
             <AppNavigationLink to="/birthdays" label="Дни рождения" icon={<BirthdayIcon className="size-4" />} />
-            <div className="col-start-4"><AppNavigationLink to="/settings" label="Настройки" icon={<SettingsIcon className="size-4" />} /></div>
+            <AppNavigationLink to="/notes" label="Заметки" icon={<NotesIcon className="size-4" />} />
+            <AppNavigationLink to="/settings" label="Настройки" icon={<SettingsIcon className="size-4" />} />
           </nav>
           <div className="mt-auto shrink-0 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
             <p className="text-xs font-medium uppercase tracking-[0.12em] text-[var(--color-muted)]">Аккаунт</p>
@@ -215,12 +219,13 @@ function AuthenticatedAppShell() {
             <div className="flex items-center gap-1"><Link to="/settings" aria-label="Настройки профиля" className="grid size-11 place-items-center rounded-xl text-[var(--color-muted)] hover:text-[var(--color-ink)] focus-visible:outline-2 focus-visible:outline-[var(--color-focus)]"><UserAvatar name={state.user.displayName || state.user.username} src={state.user.avatarUrl} className="size-8 text-sm" /></Link>
             <button className="grid size-11 cursor-pointer place-items-center rounded-xl text-[var(--color-muted)] hover:bg-[var(--color-surface-muted)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]" type="button" aria-label="Выйти из мобильного интерфейса" disabled={isLoggingOut} onClick={handleLogout}><LogOutIcon /></button></div>
           </header>
-          <nav className="grid grid-cols-4 gap-1 border-b border-[var(--color-border)] bg-[var(--color-sidebar)] px-4 py-2 lg:hidden" aria-label="Разделы приложения">
+          <nav className="grid grid-cols-3 gap-1 border-b border-[var(--color-border)] bg-[var(--color-sidebar)] px-4 py-2 lg:hidden" aria-label="Разделы приложения">
             <AppNavigationLink to="/app" label="Календарь" icon={<CalendarIcon className="size-4" />} />
             <AppNavigationLink to="/tasks" label="Задачи" icon={<TasksIcon className="size-4" />} />
             <AppNavigationLink to="/events" label="Мероприятия" icon={<EventIcon className="size-4" />} />
             <AppNavigationLink to="/birthdays" label="Дни рождения" icon={<BirthdayIcon className="size-4" />} />
-            <div className="col-start-4"><AppNavigationLink to="/settings" label="Настройки" icon={<SettingsIcon className="size-4" />} /></div>
+            <AppNavigationLink to="/notes" label="Заметки" icon={<NotesIcon className="size-4" />} />
+            <AppNavigationLink to="/settings" label="Настройки" icon={<SettingsIcon className="size-4" />} />
           </nav>
           <div className="p-3 sm:p-5 lg:p-7" id="planly-workspace">
             {logoutError && <p className="planly-error mb-4" role="alert">Не удалось выйти. Проверьте соединение и повторите попытку.</p>}
@@ -303,4 +308,10 @@ function SettingsScreen() {
   return <Suspense fallback={<p className="planly-card p-5" role="status">Открываем настройки…</p>}>
     <SettingsPage key={state.user.id} user={state.user} onSave={saveSettings} onSaveAvatar={saveAvatar} onAuthenticationRequired={retry} onClose={() => void navigate('/app')} />
   </Suspense>
+}
+
+function NotesScreen(){
+ const {state,retry}=useSession()
+ if(state.status!=='authenticated')return null
+ return <Suspense fallback={<p role="status">Открываем заметки…</p>}><NoteListPage key={state.user.id} csrfToken={state.csrfToken} onAuthenticationRequired={retry}/></Suspense>
 }

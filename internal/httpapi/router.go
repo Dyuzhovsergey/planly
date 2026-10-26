@@ -21,6 +21,7 @@ type Dependencies struct {
 	Tasks      TaskService
 	Events     EventService
 	Birthdays  BirthdayService
+	Notes      NoteService
 	AuthConfig AuthConfig
 }
 
@@ -60,6 +61,14 @@ func NewRouter(dependencies Dependencies) http.Handler {
 			router.Handle("GET /api/v1/me/avatar/presets/{id}", auth.requireSession(http.HandlerFunc(avatars.preset)))
 			router.Handle("PUT /api/v1/me/avatar", auth.requireOrigin(auth.requireSession(auth.requireCSRF(http.HandlerFunc(avatars.put)))))
 			router.Handle("DELETE /api/v1/me/avatar", auth.requireOrigin(auth.requireSession(auth.requireCSRF(http.HandlerFunc(avatars.delete)))))
+		}
+		if dependencies.Notes != nil {
+			notes := &noteHandler{service: dependencies.Notes}
+			router.Handle("GET /api/v1/notes", auth.requireSession(http.HandlerFunc(notes.serve)))
+			router.Handle("GET /api/v1/notes/{id}", auth.requireSession(http.HandlerFunc(notes.serve)))
+			for _, route := range []string{"POST /api/v1/notes", "PUT /api/v1/notes/{id}", "DELETE /api/v1/notes/{id}"} {
+				router.Handle(route, auth.requireOrigin(auth.requireSession(auth.requireCSRF(http.HandlerFunc(notes.serve)))))
+			}
 		}
 		if dependencies.Birthdays != nil {
 			birthdays := &birthdayHandler{service: dependencies.Birthdays}

@@ -43,8 +43,8 @@ it('creates a task series from the same draft without posting a standalone task'
  render(<TaskCreateForm csrfToken="csrf" timeZone="Europe/Moscow" onAuthenticationRequired={vi.fn()} onTaskCreated={plain} onSeriesCreated={saved}/> )
  fireEvent.change(screen.getByLabelText('Название'),{target:{value:'Новая серия'}})
  fireEvent.click(screen.getByRole('radio',{name:'Весь день'}));changeField(screen.getByLabelText('Дата'),{target:{value:'2026-10-26'}})
- fireEvent.change(screen.getByLabelText('Повтор'),{target:{value:'daily'}});expect(screen.getByLabelText('Название')).toHaveValue('Новая серия')
- fireEvent.change(screen.getByLabelText('Повтор'),{target:{value:'weekly'}})
+ changeField(screen.getByLabelText('Повтор'),{target:{value:'daily'}});expect(screen.getByLabelText('Название')).toHaveValue('Новая серия')
+ changeField(screen.getByLabelText('Повтор'),{target:{value:'weekly'}})
  fireEvent.click(screen.getByRole('button',{name:'Настроить повтор…'}))
  fireEvent.click(screen.getByLabelText('Чт'))
  fireEvent.click(screen.getByLabelText('После количества повторений'));fireEvent.change(screen.getByLabelText('Количество повторений'),{target:{value:'3'}})
@@ -57,7 +57,7 @@ it('creates a task series from the same draft without posting a standalone task'
 it('prevents duplicate series submission and keeps the draft on uncertain network outcome',async()=>{
  let reject!:(reason:Error)=>void;const fetchMock=vi.fn(()=>new Promise<Response>((_yes,no)=>{reject=no}));vi.stubGlobal('fetch',fetchMock)
  render(<TaskCreateForm csrfToken="csrf" timeZone="UTC" onAuthenticationRequired={vi.fn()} onTaskCreated={vi.fn()} onSeriesCreated={vi.fn()}/> )
- fireEvent.change(screen.getByLabelText('Название'),{target:{value:'Черновик'}});fireEvent.click(screen.getByRole('radio',{name:'Весь день'}));changeField(screen.getByLabelText('Дата'),{target:{value:'2026-10-26'}});fireEvent.change(screen.getByLabelText('Повтор'),{target:{value:'daily'}})
+ fireEvent.change(screen.getByLabelText('Название'),{target:{value:'Черновик'}});fireEvent.click(screen.getByRole('radio',{name:'Весь день'}));changeField(screen.getByLabelText('Дата'),{target:{value:'2026-10-26'}});changeField(screen.getByLabelText('Повтор'),{target:{value:'daily'}})
  const form=screen.getByRole('button',{name:'Создать серию задач'}).closest('form')!
  fireEvent.submit(form);fireEvent.submit(form);expect(fetchMock).toHaveBeenCalledOnce();reject(new Error('offline'))
  await screen.findByRole('alert');expect(screen.getByLabelText('Название')).toHaveValue('Черновик');expect(screen.getByRole('alert')).toHaveTextContent('чтобы не создать дубль')
@@ -65,7 +65,7 @@ it('prevents duplicate series submission and keeps the draft on uncertain networ
 it('creates a timed event series with a fixed zone and preserves content when repeat is enabled',async()=>{
  const saved=vi.fn();const plain=vi.fn();const fetchMock=vi.fn().mockResolvedValue(json({...series,kind:'event'},201));vi.stubGlobal('fetch',fetchMock)
  render(<EventDialog timeZone="Europe/Moscow" initialDate="2026-10-26" csrfToken="csrf" fallbackFocusRef={{current:null}} onAuthenticationRequired={vi.fn()} onClose={vi.fn()} onSaved={plain} onDeleted={vi.fn()} onSeriesCreated={saved}/> )
- fireEvent.change(screen.getByLabelText('Название'),{target:{value:'Тренировка'}});fireEvent.change(screen.getByLabelText('Место'),{target:{value:'Зал'}});fireEvent.change(screen.getByLabelText('Повтор'),{target:{value:'daily'}})
+ fireEvent.change(screen.getByLabelText('Название'),{target:{value:'Тренировка'}});fireEvent.change(screen.getByLabelText('Место'),{target:{value:'Зал'}});changeField(screen.getByLabelText('Повтор'),{target:{value:'daily'}})
  expect(screen.getByLabelText('Место')).toHaveValue('Зал');fireEvent.click(screen.getByRole('button',{name:'Создать серию мероприятий'}))
  await waitFor(()=>expect(saved).toHaveBeenCalledOnce());expect(plain).not.toHaveBeenCalled()
  expect(fetchMock.mock.calls[0][0]).toBe('/api/v1/event-series');expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({location:'Зал',schedule:{start:'2026-10-26T06:00:00Z',end:'2026-10-26T07:00:00Z'},recurrence:{timeZone:'Europe/Moscow'}})

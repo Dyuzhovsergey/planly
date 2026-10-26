@@ -261,7 +261,7 @@ describe('session restoration', () => {
 
     expect(await screen.findByText('username is invalid')).toBeInTheDocument()
     expect(screen.getByText('password is required')).toBeInTheDocument()
-    expect(screen.getByLabelText('Логин')).toHaveFocus()
+    await waitFor(() => expect(screen.getByLabelText('Логин')).toHaveFocus())
   })
 
   it('shows a recoverable login error and prevents repeated submission', async () => {
@@ -376,7 +376,7 @@ describe('session restoration', () => {
     expect(await screen.findByText('must be a valid username')).toBeInTheDocument()
     expect(await screen.findByText('must be a valid email address')).toBeInTheDocument()
     expect(screen.getByText('must contain between 8 and 128 characters')).toBeInTheDocument()
-    expect(screen.getByLabelText('Логин')).toHaveFocus()
+    await waitFor(() => expect(screen.getByLabelText('Логин')).toHaveFocus())
   })
 
   it('uses Europe/Moscow without showing a field when browser detection fails', async () => {
@@ -451,7 +451,7 @@ describe('session restoration', () => {
     await fillAndSubmitRegistration()
 
     expect(await screen.findByText('Этот логин уже занят.')).toBeInTheDocument()
-    expect(screen.getByLabelText('Логин')).toHaveFocus()
+    await waitFor(() => expect(screen.getByLabelText('Логин')).toHaveFocus())
   })
 
   it('shows a recoverable registration error and prevents repeated submission', async () => {
@@ -611,9 +611,10 @@ it('places settings after birthdays in desktop and mobile navigation', async () 
   await screen.findByLabelText('Отображаемое имя')
   for (const navigation of screen.getAllByRole('navigation', { name: 'Разделы приложения' })) {
     const links = within(navigation).getAllByRole('link')
-    expect(links.map((link) => link.textContent)).toEqual(['Календарь', 'Задачи', 'Мероприятия', 'Дни рождения', 'Настройки'])
-    expect(links[4]).toHaveAttribute('href', '/settings')
-    expect(links[4]).toHaveAttribute('aria-current', 'page')
+    expect(links.map((link) => link.textContent)).toEqual(['Календарь', 'Задачи', 'Мероприятия', 'Дни рождения', 'Заметки', 'Настройки'])
+    expect(links[4]).toHaveAttribute('href', '/notes')
+    expect(links[5]).toHaveAttribute('href', '/settings')
+    expect(links[5]).toHaveAttribute('aria-current', 'page')
   }
 })
 

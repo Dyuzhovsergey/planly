@@ -115,3 +115,9 @@ export function eventIntersects(value: PlanlyEvent, range: { from: string; to: s
   const to = Temporal.PlainDate.from(range.to).toZonedDateTime(zone).toInstant()
   return Temporal.Instant.compare(Temporal.Instant.from(value.schedule.start), to) < 0 && Temporal.Instant.compare(Temporal.Instant.from(value.schedule.end), from) > 0
 }
+
+/** Ongoing meetings remain upcoming until their exclusive end. */
+export function eventIsPast(event: PlanlyEvent, zone: string, now: number) {
+  if (event.schedule.type === 'timed') return Date.parse(event.schedule.end) <= now
+  return event.schedule.endDate <= Temporal.Instant.fromEpochMilliseconds(now).toZonedDateTimeISO(zone).toPlainDate().toString()
+}

@@ -17,6 +17,7 @@ import (
 	"github.com/Dyuzhovsergey/planly/internal/config"
 	"github.com/Dyuzhovsergey/planly/internal/event"
 	"github.com/Dyuzhovsergey/planly/internal/httpapi"
+	"github.com/Dyuzhovsergey/planly/internal/note"
 	"github.com/Dyuzhovsergey/planly/internal/platform/postgres"
 	"github.com/Dyuzhovsergey/planly/internal/recurrence"
 	"github.com/Dyuzhovsergey/planly/internal/task"
@@ -63,6 +64,7 @@ func run() error {
 			Tasks:      taskService,
 			Events:     eventService,
 			Birthdays:  birthdayService,
+			Notes:      note.NewService(postgres.NewNoteRepository(database)),
 			AuthConfig: httpapi.AuthConfig{
 				AllowedOrigin: appConfig.AppOrigin,
 				CookieSecure:  appConfig.CookieSecure,

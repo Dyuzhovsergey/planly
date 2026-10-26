@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
-import { afterEach, expect, it, vi } from 'vitest'
+import { beforeEach, afterEach, expect, it, vi } from 'vitest'
 import { TaskListPage } from '../tasks/TaskListPage'
 import { EventListPage } from '../events/EventListPage'
 import { TaskCalendarDashboard } from '../tasks/TaskCalendarDashboard'
@@ -74,3 +74,5 @@ it('renders both occurrence kinds in the calendar, routes clicks safely and appl
  expect(screen.queryByRole('button',{name:'Календарная запись Индивидуальная задача'})).not.toBeInTheDocument();expect(screen.queryByRole('button',{name:'Календарная запись Разовая задача'})).not.toBeInTheDocument()
  await screen.findByRole('button',{name:'Календарная запись Повтор встречи'})
 })
+
+beforeEach(()=>{vi.spyOn(Date,'now').mockReturnValue(Date.parse('2026-10-26T06:00:00Z'))})

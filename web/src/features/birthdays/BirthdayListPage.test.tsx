@@ -1,3 +1,4 @@
+import { changeField } from '../../shared/ui/date-time-testing'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, useLocation, useNavigate } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -58,7 +59,7 @@ describe('BirthdayListPage', () => {
     const opener = screen.getByRole('button', { name: 'Добавить день рождения' }); opener.focus(); fireEvent.click(opener)
     expect(screen.getByLabelText('Имя')).toHaveFocus()
     fireEvent.change(screen.getByLabelText('Имя'), { target: { value: '  Лена  ' } })
-    fireEvent.change(screen.getByLabelText('День'), { target: { value: '29' } }); fireEvent.change(screen.getByLabelText('Месяц'), { target: { value: '2' } })
+    fireEvent.change(screen.getByLabelText('День'), { target: { value: '29' } }); changeField(screen.getByLabelText('Месяц'), { target: { value: '2' } })
     fireEvent.change(screen.getByLabelText('Заметка'), { target: { value: 'Поздравить' } })
     fireEvent.click(screen.getByRole('button', { name: 'Создать день рождения' })); await screen.findByText(/День рождения «Лена» сохранён/)
     const post = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST')!
@@ -102,7 +103,7 @@ describe('BirthdayListPage', () => {
   it('validates impossible dates and keeps the form after server validation errors', async () => {
     page(); await screen.findByRole('button', { name: /Маша/ }); fireEvent.click(screen.getByRole('button', { name: 'Добавить день рождения' }))
     fireEvent.click(screen.getByRole('button', { name: 'Создать день рождения' })); expect(screen.getByLabelText('Имя')).toHaveFocus()
-    fireEvent.change(screen.getByLabelText('Имя'), { target: { value: 'N' } }); fireEvent.change(screen.getByLabelText('День'), { target: { value: '31' } }); fireEvent.change(screen.getByLabelText('Месяц'), { target: { value: '4' } })
+    fireEvent.change(screen.getByLabelText('Имя'), { target: { value: 'N' } }); fireEvent.change(screen.getByLabelText('День'), { target: { value: '31' } }); changeField(screen.getByLabelText('Месяц'), { target: { value: '4' } })
     fireEvent.click(screen.getByRole('button', { name: 'Создать день рождения' })); expect(screen.getByLabelText('День')).toHaveAttribute('aria-invalid', 'true')
     fireEvent.change(screen.getByLabelText('День'), { target: { value: '30' } }); fetchMock.mockResolvedValueOnce(json({ code: 'validation_failed', errors: { birthYear: ['invalid'] } }, 422))
     fireEvent.click(screen.getByRole('button', { name: 'Создать день рождения' })); await screen.findByText('Проверьте отмеченные поля и повторите сохранение.')

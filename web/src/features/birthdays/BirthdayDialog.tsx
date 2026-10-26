@@ -1,3 +1,4 @@
+import { SelectField } from '../../shared/ui/SelectField'
 import { useEffect, useRef, useState, type FormEvent, type RefObject } from 'react'
 import { ApiError } from '../../shared/api/client'
 import { Modal } from '../../shared/ui/Modal'
@@ -111,7 +112,7 @@ export function BirthdayDialog({ birthdayId, initialDate, timeZone, csrfToken, f
         </div>
         <div className="min-w-0">
           <label className="mb-1 block text-sm font-medium" htmlFor="birthday-month">Месяц</label>
-          <select className="planly-input w-full min-w-0" id="birthday-month" name="month" value={draft.month} disabled={busy} aria-invalid={Boolean(errors.month)} aria-describedby={errors.month ? 'birthday-error-month' : undefined} onChange={(e) => update('month', e.target.value)}>{months.map((month, index) => <option key={month} value={index + 1}>{month}</option>)}</select>
+          <SelectField id="birthday-month" label="Месяц" name="month" value={draft.month} disabled={busy} invalid={Boolean(errors.month)} describedBy={errors.month ? 'birthday-error-month' : undefined} onValueChange={value => update('month', value)} options={months.map((month,index)=>({value:String(index+1),label:month}))} />
           {fieldError('month')}
         </div>
       </div>

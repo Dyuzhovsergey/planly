@@ -1,3 +1,4 @@
+import { SelectField } from '../../shared/ui/SelectField'
 import { useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Temporal } from 'temporal-polyfill'
@@ -31,7 +32,7 @@ export function RepeatPicker({ value, onChange, enabled = true, onEnabledChange,
   timed: boolean; anchor: string; errors?: Record<string, string>; disabled?: boolean
 }) {
   const id = useId()
-  const select = useRef<HTMLSelectElement>(null)
+  const select = useRef<HTMLElement>(null)
   const panel = useRef<HTMLDivElement>(null)
   const [choice, setChoice] = useState<string | null>(null)
   const [draft, setDraft] = useState<RuleDraft | null>(null)
@@ -72,12 +73,9 @@ export function RepeatPicker({ value, onChange, enabled = true, onEnabledChange,
   } catch { /* The main date field reports incomplete dates. */ }
   return <div className="space-y-2">
     <label htmlFor={`${id}-repeat`} className="block text-sm font-medium">Повтор</label>
-    <select ref={select} id={`${id}-repeat`} className="planly-input w-full" disabled={disabled}
-      value={enabled ? choice ?? preset(value, anchor) : 'none'} onChange={e => selectPreset(e.target.value)}>
-      {onEnabledChange && <option value="none">Не повторяется</option>}
-      <option value="daily">Каждый день</option><option value="weekly">{weekly}</option>
-      <option value="monthly">{monthly}</option><option value="yearly">{yearly}</option><option value="custom">Другое…</option>
-    </select>
+    <SelectField ref={select} id={`${id}-repeat`} label="Повтор" disabled={disabled}
+      value={enabled ? choice ?? preset(value, anchor) : 'none'} onValueChange={selectPreset}
+      options={[...(onEnabledChange ? [{value:'none',label:'Не повторяется'}] : []),{value:'daily',label:'Каждый день'},{value:'weekly',label:weekly},{value:'monthly',label:monthly},{value:'yearly',label:yearly},{value:'custom',label:'Другое…'}]} />
     {enabled && validated?.rule && <p className="text-xs leading-5 text-[var(--color-muted)]">{ruleSummary(validated.rule)}</p>}
     {enabled && (value.frequency === 'monthly' || value.frequency === 'yearly') && <p className="text-xs leading-5 text-[var(--color-muted)]">Отсутствующие даты пропускаются: 31-е не сдвигается, 29 февраля — только в високосные годы.</p>}
     {enabled && <button type="button" className="min-h-11 text-sm font-medium text-[var(--color-accent-strong)] underline" disabled={disabled} onClick={custom}>Настроить повтор…</button>}

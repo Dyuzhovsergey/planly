@@ -10,6 +10,7 @@ const json = (value: unknown, status = 200) => new Response(JSON.stringify(value
 let items: PlanlyEvent[]
 let fetchMock: ReturnType<typeof vi.fn>
 beforeEach(() => {
+  vi.spyOn(Date,'now').mockReturnValue(Date.parse('2026-10-22T10:00:00Z'))
   items = [structuredClone(fixture)]
   fetchMock = vi.fn(async (path: string, init?: RequestInit) => {
     if (init?.method === 'DELETE') { items = []; return new Response(null, { status: 204 }) }
@@ -76,7 +77,7 @@ describe('EventListPage', () => {
     expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false)
     fireEvent.click(within(confirmation).getByRole('button', { name: 'Удалить мероприятие' }))
     await screen.findByText('Мероприятие удалено.')
-    expect(await screen.findByText('В этом месяце пока нет мероприятий.')).toBeInTheDocument()
+    expect(await screen.findByText('В этом месяце нет предстоящих мероприятий.')).toBeInTheDocument()
   })
   it('retains the draft after network errors and prevents duplicate submission/closing while busy', async () => {
     page(); await screen.findByRole('button', { name: /Встреча с командой/ })
@@ -113,3 +114,14 @@ describe('EventListPage', () => {
 })
 
 vi.mock('../recurrence/useOccurrences',()=>({useOccurrences:()=>({items:[],status:'loaded',limited:false,refresh:vi.fn()})}))
+
+it('filters by exclusive end, persists status in URL and preserves search/month',async()=>{
+ items=[{...fixture,title:'Предстоящая'},{...fixture,id:'past',title:'Прошедшая',schedule:{type:'timed',start:'2026-10-21T09:00:00Z',end:'2026-10-22T10:00:00Z'}}]
+ page('/events?month=2026-10&source=link')
+ await screen.findByText('Предстоящая');expect(screen.queryByText('Прошедшая')).not.toBeInTheDocument()
+ fireEvent.click(screen.getByRole('button',{name:'Прошедшие · 1'}))
+ await screen.findByText('Прошедшая');expect(screen.queryByText('Предстоящая')).not.toBeInTheDocument()
+ expect(screen.getByTestId('location')).toHaveTextContent('status=past');expect(screen.getByTestId('location')).toHaveTextContent('source=link')
+ fireEvent.change(screen.getByLabelText('Поиск мероприятий'),{target:{value:'нет'}});await screen.findByText('По вашему запросу ничего не найдено.')
+ fireEvent.click(screen.getByRole('button',{name:'Следующий месяц'}));expect(screen.getByTestId('location')).toHaveTextContent('status=past')
+})

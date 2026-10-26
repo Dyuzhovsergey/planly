@@ -1,3 +1,4 @@
+import { SegmentedControl } from '../../shared/ui/SegmentedControl'
 import { useOccurrences } from '../recurrence/useOccurrences'
 import { occurrenceEvent, sortCalendarItems } from '../recurrence/view'
 import { OccurrenceDialog } from '../recurrence/OccurrenceDialog'
@@ -10,7 +11,7 @@ import { ChevronLeftIcon, ChevronRightIcon, PlusIcon } from '../../shared/ui/ico
 import { currentTaskMonth, shiftTaskMonth, taskMonthLabel, taskMonthYear } from '../tasks/task-list-url-state'
 import { currentCalendarDate } from '../tasks/calendar-url-state'
 import { EventDialog } from './EventDialog'
-import { eventIntersects, eventMatches, formatEventSchedule } from './event-utils'
+import { eventIntersects, eventIsPast, eventMatches, formatEventSchedule } from './event-utils'
 import { eventMonthRange, eventSearchParams, eventURLState } from './event-url-state'
 import type { PlanlyEvent } from './types'
 import { useEventList } from './useEventList'
@@ -20,19 +21,29 @@ export function EventListPage({ timeZone, csrfToken, onAuthenticationRequired }:
   const { timeFormat } = useCalendarPreferences()
 
   const [params, setParams] = useSearchParams()
-  const { month, q } = eventURLState(params, timeZone)
+  const { month, q, status } = eventURLState(params, timeZone)
   const range = useMemo(() => eventMonthRange(month), [month])
   const data = useEventList(range, onAuthenticationRequired)
   const repeats=useOccurrences('event',range,timeZone,onAuthenticationRequired)
   const meetings=useMemo(()=>sortCalendarItems([...data.items,...repeats.items.map(occurrenceEvent)],timeZone),[data.items,repeats.items,timeZone])
   const query = useDeferredValue(q)
-  const visible = meetings.filter((event) => eventMatches(event, query))
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const tick = () => setNow(Date.now())
+    const timer = window.setInterval(tick, 1000)
+    window.addEventListener('focus', tick)
+    document.addEventListener('visibilitychange', tick)
+    return () => { window.clearInterval(timer); window.removeEventListener('focus', tick); document.removeEventListener('visibilitychange', tick) }
+  }, [])
+  const past = meetings.filter(event => eventIsPast(event, timeZone, now)).length
+  const visible = meetings.filter((event) => eventIsPast(event, timeZone, now) === (status === 'past') && eventMatches(event, query))
   const [dialog, setDialog] = useState<PlanlyEvent | 'create' | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const createRef = useRef<HTMLButtonElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
   const panelRef = useRef<HTMLElement>(null)
   const canonical = eventSearchParams(params, month, q)
+  if (status === 'past') canonical.set('status', 'past'); else canonical.delete('status')
   useEffect(() => {
     if (params.toString() !== canonical.toString()) setParams(canonical, { replace: true })
   }, [params, canonical, setParams])
@@ -58,6 +69,7 @@ export function EventListPage({ timeZone, csrfToken, onAuthenticationRequired }:
         {q && <button type="button" className="planly-button-secondary" onClick={() => { setParams(eventSearchParams(params, month, ''), { replace: true }); searchRef.current?.focus() }}>Очистить поиск</button>}
       </div>
     </div>
+    <SegmentedControl className="mb-4" label="Период мероприятий" value={status} options={[{value:'upcoming',label:`Предстоящие · ${meetings.length-past}`},{value:'past',label:`Прошедшие · ${past}`}]} onValueChange={value => {const next=eventSearchParams(params,month,q); if(value==='past') next.set('status',value);else next.delete('status');setParams(next)}} />
     <RecurrenceLoadNotice kind="event" data={repeats}/>
     {notice && <SuccessNotice className="mb-4">{notice}</SuccessNotice>}
     {data.status === 'loading' && <p role="status" className="py-8 text-center text-[var(--color-muted)]">Загружаем мероприятия…</p>}
@@ -72,12 +84,12 @@ export function EventListPage({ timeZone, csrfToken, onAuthenticationRequired }:
           {event.location && <span className="mt-1 block break-words text-sm text-[var(--color-muted)]">Место: {event.location}</span>}
           <span className="mt-2 block text-xs font-medium text-[var(--color-accent-strong)]">Открыть мероприятие</span>
         </button>
-      </li>)}</ul> : repeats.status==='loaded' ? <p className="rounded-2xl bg-[var(--color-surface-muted)] p-8 text-center text-[var(--color-muted)]">{q ? 'По вашему запросу ничего не найдено.' : 'В этом месяце пока нет мероприятий.'}</p> : null}
+      </li>)}</ul> : repeats.status==='loaded' ? <p className="rounded-2xl bg-[var(--color-surface-muted)] p-8 text-center text-[var(--color-muted)]">{q ? 'По вашему запросу ничего не найдено.' : status === 'past' ? 'В этом месяце нет прошедших мероприятий.' : 'В этом месяце нет предстоящих мероприятий.'}</p> : null}
     </>}
     {dialog&&dialog!=='create'&&dialog.recurrence?<OccurrenceDialog key={dialog.id} initial={dialog.recurrence} timeZone={timeZone} csrfToken={csrfToken} fallbackFocusRef={panelRef} onAuthenticationRequired={onAuthenticationRequired} onClose={()=>{setDialog(null);repeats.refresh()}} onChanged={message=>{setDialog(null);repeats.refresh();setNotice(message)}}/>:dialog&&<EventDialog key={dialog === 'create' ? 'create' : dialog.id} event={dialog === 'create' ? undefined : dialog} initialDate={month === currentTaskMonth(timeZone) ? currentCalendarDate(timeZone) : `${month}-01`} timeZone={timeZone} csrfToken={csrfToken} fallbackFocusRef={dialog === 'create' ? createRef : panelRef} onAuthenticationRequired={onAuthenticationRequired} onClose={() => setDialog(null)} onSeriesCreated={()=>{setDialog(null);repeats.refresh();setNotice('Серия мероприятий создана. Повторения вне выбранного месяца или поиска появятся при смене условий.')}} onSaved={(value) => {
       setDialog(null); data.refresh()
       const intersects = eventIntersects(value, range, timeZone)
-      setNotice(`Мероприятие «${value.title}» сохранено.${!intersects ? ' Оно находится вне выбранного месяца.' : !eventMatches(value, q) ? ' Оно скрыто текущим поиском.' : ''}`)
+      setNotice(`Мероприятие «${value.title}» сохранено.${!intersects ? ' Оно находится вне выбранного месяца.' : !eventMatches(value, q) ? ' Оно скрыто текущим поиском.' : eventIsPast(value,timeZone,Date.now()) !== (status==='past') ? ' Оно находится в другой вкладке периода.' : ''}`)
     }} onDeleted={() => { setDialog(null); data.refresh(); setNotice('Мероприятие удалено.') }} />}
   </section>
 }

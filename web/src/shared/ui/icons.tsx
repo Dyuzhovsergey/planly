@@ -125,3 +125,5 @@ export function BirthdayIcon({ className = 'size-5' }: IconProps) {
 export function SettingsIcon({ className = 'size-5' }: IconProps) {
   return <svg {...common} className={className}><path d="m9 3-1 3-3 1v4l2 1-1 3 3 3 3-1 2 2 3-2v-3l3-2-1-4-3-1-1-3Z" /><circle cx="12" cy="11" r="3" /></svg>
 }
+
+export function NotesIcon({className='size-5'}:IconProps) {return <svg {...common} className={className}><path d="M5 3h14v18H5zM8 7h8M8 11h8M8 15h5"/></svg>}
