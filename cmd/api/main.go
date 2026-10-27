@@ -12,9 +12,14 @@ import (
 	"time"
 
 	"github.com/Dyuzhovsergey/planly/internal/auth"
+	"github.com/Dyuzhovsergey/planly/internal/avatar"
+	"github.com/Dyuzhovsergey/planly/internal/birthday"
 	"github.com/Dyuzhovsergey/planly/internal/config"
+	"github.com/Dyuzhovsergey/planly/internal/event"
 	"github.com/Dyuzhovsergey/planly/internal/httpapi"
+	"github.com/Dyuzhovsergey/planly/internal/note"
 	"github.com/Dyuzhovsergey/planly/internal/platform/postgres"
+	"github.com/Dyuzhovsergey/planly/internal/recurrence"
 	"github.com/Dyuzhovsergey/planly/internal/task"
 )
 
@@ -46,13 +51,20 @@ func run() error {
 	}
 	taskRepository := postgres.NewTaskRepository(database)
 	taskService := task.NewService(taskRepository)
+	eventService := event.NewService(postgres.NewEventRepository(database))
+	birthdayService := birthday.NewService(postgres.NewBirthdayRepository(database))
 
 	server := &http.Server{
 		Addr: appConfig.HTTPAddr,
 		Handler: httpapi.NewRouter(httpapi.Dependencies{
-			Database: database,
-			Auth:     authService,
-			Tasks:    taskService,
+			Recurrence: recurrence.NewService(postgres.NewRecurrenceRepository(database)),
+			Avatars:    avatar.NewService(postgres.NewAvatarRepository(database)),
+			Database:   database,
+			Auth:       authService,
+			Tasks:      taskService,
+			Events:     eventService,
+			Birthdays:  birthdayService,
+			Notes:      note.NewService(postgres.NewNoteRepository(database)),
 			AuthConfig: httpapi.AuthConfig{
 				AllowedOrigin: appConfig.AppOrigin,
 				CookieSecure:  appConfig.CookieSecure,

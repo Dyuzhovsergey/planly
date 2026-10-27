@@ -1,0 +1,248 @@
+import { type FormEvent, useEffect, useRef, useState } from 'react'
+
+import { ApiError } from '../../shared/api/client'
+import { browserTimeZoneAdapter } from './time-zone'
+import type { RegistrationInput } from './types'
+
+interface RegistrationFormProps {
+  onRegister: (input: RegistrationInput) => Promise<void>
+}
+
+interface FieldErrors {
+  username?: string
+  email?: string
+  password?: string
+}
+
+export function RegistrationForm({ onRegister }: RegistrationFormProps) {
+  const [username, setUsername] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
+  const [formError, setFormError] = useState<string | null>(null)
+  const [fieldToFocus, setFieldToFocus] = useState<keyof FieldErrors | null>(null)
+  const usernameInput = useRef<HTMLInputElement>(null)
+  const emailInput = useRef<HTMLInputElement>(null)
+  const passwordInput = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (isSubmitting) {
+      return
+    }
+    if (fieldToFocus === 'username') {
+      usernameInput.current?.focus()
+    } else if (fieldToFocus === 'email') {
+      emailInput.current?.focus()
+    } else if (fieldToFocus === 'password') {
+      passwordInput.current?.focus()
+    }
+  }, [fieldToFocus, isSubmitting])
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (isSubmitting) {
+      return
+    }
+
+    setIsSubmitting(true)
+    setFieldErrors({})
+    setFormError(null)
+    setFieldToFocus(null)
+
+    try {
+      await onRegister({
+        username,
+        email,
+        password,
+        timeZone: browserTimeZoneAdapter.getCurrentTimeZone(),
+      })
+    } catch (error: unknown) {
+      if (
+        error instanceof ApiError &&
+        error.problem?.code === 'username_already_registered'
+      ) {
+        setFieldErrors({ username: 'Этот логин уже занят.' })
+        setFieldToFocus('username')
+      } else if (
+        error instanceof ApiError &&
+        error.problem?.code === 'email_already_registered'
+      ) {
+        setFieldErrors({ email: 'Пользователь с таким email уже зарегистрирован.' })
+        setFieldToFocus('email')
+      } else if (
+        error instanceof ApiError &&
+        error.problem?.code === 'validation_failed'
+      ) {
+        const errors = error.problem.errors ?? {}
+        const nextErrors = {
+          username: errors.username?.[0],
+          email: errors.email?.[0],
+          password: errors.password?.[0],
+        }
+        setFieldErrors(nextErrors)
+        if (nextErrors.username) {
+          setFieldToFocus('username')
+        } else if (nextErrors.email) {
+          setFieldToFocus('email')
+        } else if (nextErrors.password) {
+          setFieldToFocus('password')
+        } else if (errors.timeZone) {
+          setFormError(
+            'Не удалось определить параметры устройства. Повторите попытку.',
+          )
+        }
+      } else {
+        setFormError(
+          'Не удалось создать аккаунт. Проверьте соединение и повторите попытку.',
+        )
+      }
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  return (
+    <form
+      className="mt-6 space-y-5"
+      noValidate
+      onSubmit={handleSubmit}
+      aria-busy={isSubmitting}
+    >
+      <div>
+        <label
+          className="block text-sm font-medium text-[var(--color-ink)]"
+          htmlFor="registration-username"
+        >
+          Логин
+        </label>
+        <input
+          ref={usernameInput}
+          className="planly-input mt-2"
+          id="registration-username"
+          name="username"
+          type="text"
+          autoComplete="username"
+          minLength={3}
+          maxLength={32}
+          required
+          disabled={isSubmitting}
+          value={username}
+          aria-invalid={Boolean(fieldErrors.username)}
+          aria-describedby={fieldErrors.username ? 'registration-username-error' : 'registration-username-help'}
+          onChange={(event) => setUsername(event.target.value)}
+        />
+        <p className="mt-2 text-sm text-[var(--color-muted)]" id="registration-username-help">
+          3–32 символа: латинские буквы, цифры, точка, дефис или подчёркивание.
+        </p>
+        {fieldErrors.username && (
+          <p
+            className="mt-2 text-sm text-[var(--color-danger)]"
+            id="registration-username-error"
+            role="alert"
+          >
+            {fieldErrors.username}
+          </p>
+        )}
+      </div>
+
+      <div>
+        <label
+          className="block text-sm font-medium text-[var(--color-ink)]"
+          htmlFor="registration-email"
+        >
+          Email
+        </label>
+        <input
+          ref={emailInput}
+          className="planly-input mt-2"
+          id="registration-email"
+          name="email"
+          type="email"
+          autoComplete="email"
+          inputMode="email"
+          required
+          disabled={isSubmitting}
+          value={email}
+          aria-invalid={Boolean(fieldErrors.email)}
+          aria-describedby={fieldErrors.email ? 'registration-email-error' : undefined}
+          onChange={(event) => setEmail(event.target.value)}
+        />
+        {fieldErrors.email && (
+          <p
+            className="mt-2 text-sm text-[var(--color-danger)]"
+            id="registration-email-error"
+            role="alert"
+          >
+            {fieldErrors.email}
+          </p>
+        )}
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between gap-4">
+          <label
+            className="block text-sm font-medium text-[var(--color-ink)]"
+            htmlFor="registration-password"
+          >
+            Пароль
+          </label>
+          <button
+            className="min-h-11 cursor-pointer rounded-md px-2 text-sm font-semibold text-[var(--color-accent-strong)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)] disabled:cursor-not-allowed disabled:opacity-50"
+            type="button"
+            disabled={isSubmitting}
+            aria-controls="registration-password"
+            onClick={() => setShowPassword((current) => !current)}
+          >
+            {showPassword ? 'Скрыть пароль' : 'Показать пароль'}
+          </button>
+        </div>
+        <input
+          ref={passwordInput}
+          className="planly-input mt-2"
+          id="registration-password"
+          name="password"
+          type={showPassword ? 'text' : 'password'}
+          autoComplete="new-password"
+          required
+          disabled={isSubmitting}
+          value={password}
+          aria-invalid={Boolean(fieldErrors.password)}
+          aria-describedby={
+            fieldErrors.password
+              ? 'registration-password-help registration-password-error'
+              : 'registration-password-help'
+          }
+          onChange={(event) => setPassword(event.target.value)}
+        />
+        <p className="mt-2 text-sm text-[var(--color-muted)]" id="registration-password-help">
+          От 8 до 128 символов.
+        </p>
+        {fieldErrors.password && (
+          <p
+            className="mt-2 text-sm text-[var(--color-danger)]"
+            id="registration-password-error"
+            role="alert"
+          >
+            {fieldErrors.password}
+          </p>
+        )}
+      </div>
+
+      {formError && (
+        <p className="rounded-lg bg-[var(--color-danger-soft)] p-3 text-sm text-[var(--color-danger)]" role="alert">
+          {formError}
+        </p>
+      )}
+
+      <button
+        className="planly-button-primary w-full"
+        type="submit"
+        disabled={isSubmitting}
+      >
+        {isSubmitting ? 'Создаём аккаунт…' : 'Создать аккаунт'}
+      </button>
+    </form>
+  )
+}

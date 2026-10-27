@@ -37,19 +37,24 @@ func (repository *AuthRepository) CreateUserAndSession(
 
 	var user auth.User
 	err = tx.QueryRow(ctx, `
-		INSERT INTO users (email, password_hash, time_zone)
-		VALUES ($1, $2, $3)
-		RETURNING id, email, password_hash, time_zone, created_at, updated_at
-	`, params.Email, params.PasswordHash, params.TimeZone).Scan(
+		INSERT INTO users (username, email, password_hash, time_zone)
+		VALUES ($1, $2, $3, $4)
+		RETURNING id, username, email, password_hash, time_zone, display_name, week_starts_on, time_format, avatar_key, created_at, updated_at
+	`, params.Username, params.Email, params.PasswordHash, params.TimeZone).Scan(
 		&user.ID,
+		&user.Username,
 		&user.Email,
 		&user.PasswordHash,
 		&user.TimeZone,
+		&user.DisplayName, &user.WeekStartsOn, &user.TimeFormat, &user.AvatarKey,
 		&user.CreatedAt,
 		&user.UpdatedAt,
 	)
 	if err != nil {
-		if isEmailConflict(err) {
+		if isUniqueConflict(err, "users_username_key") {
+			return auth.User{}, auth.ErrUsernameTaken
+		}
+		if isUniqueConflict(err, "users_email_key") {
 			return auth.User{}, auth.ErrEmailTaken
 		}
 		return auth.User{}, fmt.Errorf("insert user: %w", err)
@@ -69,18 +74,20 @@ func (repository *AuthRepository) CreateUserAndSession(
 	return user, nil
 }
 
-// FindUserByEmail returns credentials used by the authentication service.
-func (repository *AuthRepository) FindUserByEmail(ctx context.Context, email string) (auth.User, error) {
+// FindUserByUsername returns credentials used by the authentication service.
+func (repository *AuthRepository) FindUserByUsername(ctx context.Context, username string) (auth.User, error) {
 	var user auth.User
 	err := repository.pool.QueryRow(ctx, `
-		SELECT id, email, password_hash, time_zone, created_at, updated_at
+		SELECT id, username, email, password_hash, time_zone, display_name, week_starts_on, time_format, avatar_key, created_at, updated_at
 		FROM users
-		WHERE email = $1
-	`, email).Scan(
+		WHERE username = $1
+	`, username).Scan(
 		&user.ID,
+		&user.Username,
 		&user.Email,
 		&user.PasswordHash,
 		&user.TimeZone,
+		&user.DisplayName, &user.WeekStartsOn, &user.TimeFormat, &user.AvatarKey,
 		&user.CreatedAt,
 		&user.UpdatedAt,
 	)
@@ -88,7 +95,7 @@ func (repository *AuthRepository) FindUserByEmail(ctx context.Context, email str
 		return auth.User{}, auth.ErrNotFound
 	}
 	if err != nil {
-		return auth.User{}, fmt.Errorf("find user by email: %w", err)
+		return auth.User{}, fmt.Errorf("find user by username: %w", err)
 	}
 
 	return user, nil
@@ -136,7 +143,7 @@ func (repository *AuthRepository) FindSessionUser(ctx context.Context, tokenHash
 	err := repository.pool.QueryRow(ctx, `
 		SELECT
 			s.token_hash, s.user_id, s.csrf_token_hash, s.created_at, s.expires_at,
-			u.id, u.email, u.time_zone, u.created_at, u.updated_at
+			u.id, u.username, u.email, u.time_zone, u.display_name, u.week_starts_on, u.time_format, u.avatar_key, u.created_at, u.updated_at
 		FROM sessions AS s
 		JOIN users AS u ON u.id = s.user_id
 		WHERE s.token_hash = $1
@@ -147,8 +154,10 @@ func (repository *AuthRepository) FindSessionUser(ctx context.Context, tokenHash
 		&sessionUser.Session.CreatedAt,
 		&sessionUser.Session.ExpiresAt,
 		&sessionUser.User.ID,
+		&sessionUser.User.Username,
 		&sessionUser.User.Email,
 		&sessionUser.User.TimeZone,
+		&sessionUser.User.DisplayName, &sessionUser.User.WeekStartsOn, &sessionUser.User.TimeFormat, &sessionUser.User.AvatarKey,
 		&sessionUser.User.CreatedAt,
 		&sessionUser.User.UpdatedAt,
 	)
@@ -180,24 +189,23 @@ func (repository *AuthRepository) UpdateSessionCSRF(ctx context.Context, tokenHa
 
 // UpdateUserTimeZone changes one user's calendar time zone and returns public user fields.
 func (repository *AuthRepository) UpdateUserTimeZone(ctx context.Context, userID, timeZone string) (auth.User, error) {
+	return repository.UpdateUserProfile(ctx, userID, auth.ProfileUpdate{TimeZone: &timeZone})
+}
+
+// UpdateUserProfile changes only supplied preferences in one atomic SQL statement.
+func (repository *AuthRepository) UpdateUserProfile(ctx context.Context, userID string, params auth.ProfileUpdate) (auth.User, error) {
 	var user auth.User
-	err := repository.pool.QueryRow(ctx, `
-		UPDATE users
-		SET time_zone = $2, updated_at = now()
-		WHERE id = $1
-		RETURNING id, email, time_zone, created_at, updated_at
-	`, userID, timeZone).Scan(
-		&user.ID,
-		&user.Email,
-		&user.TimeZone,
-		&user.CreatedAt,
-		&user.UpdatedAt,
-	)
+	err := repository.pool.QueryRow(ctx, `UPDATE users SET
+        display_name=COALESCE($2::text,display_name), time_zone=COALESCE($3::text,time_zone),
+        week_starts_on=COALESCE($4::text,week_starts_on), time_format=COALESCE($5::text,time_format), updated_at=now()
+        WHERE id=$1 RETURNING id,username,email,time_zone,display_name,week_starts_on,time_format,avatar_key,created_at,updated_at`,
+		userID, params.DisplayName, params.TimeZone, params.WeekStartsOn, params.TimeFormat).Scan(
+		&user.ID, &user.Username, &user.Email, &user.TimeZone, &user.DisplayName, &user.WeekStartsOn, &user.TimeFormat, &user.AvatarKey, &user.CreatedAt, &user.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return auth.User{}, auth.ErrNotFound
 	}
 	if err != nil {
-		return auth.User{}, fmt.Errorf("update user time zone: %w", err)
+		return auth.User{}, fmt.Errorf("update user preferences: %w", err)
 	}
 	return user, nil
 }
@@ -210,9 +218,9 @@ func (repository *AuthRepository) DeleteSession(ctx context.Context, tokenHash [
 	return nil
 }
 
-func isEmailConflict(err error) bool {
+func isUniqueConflict(err error, constraintName string) bool {
 	var postgresErr *pgconn.PgError
 	return errors.As(err, &postgresErr) &&
 		postgresErr.Code == uniqueViolation &&
-		postgresErr.ConstraintName == "users_email_key"
+		postgresErr.ConstraintName == constraintName
 }

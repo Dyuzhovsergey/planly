@@ -15,6 +15,7 @@ func TestMeReturnsAuthenticatedUserAndCSRFToken(t *testing.T) {
 	service := &fakeAuthService{identity: auth.SessionIdentity{
 		User: auth.User{
 			ID:           "user-id",
+			Username:     "sergey",
 			Email:        "user@example.com",
 			PasswordHash: "must-not-leak",
 			TimeZone:     "Europe/Moscow",
@@ -38,6 +39,7 @@ func TestMeReturnsAuthenticatedUserAndCSRFToken(t *testing.T) {
 	body := response.Body.String()
 	for _, want := range []string{
 		`"id":"user-id"`,
+		`"username":"sergey"`,
 		`"email":"user@example.com"`,
 		`"timeZone":"Europe/Moscow"`,
 		`"createdAt":"2026-10-12T07:00:00Z"`,
@@ -96,6 +98,7 @@ func TestUpdateMeUsesAuthenticatedUserAndReturnsAuthEnvelope(t *testing.T) {
 		},
 		updatedUser: auth.User{
 			ID:           "trusted-user-id",
+			Username:     "sergey",
 			Email:        "user@example.com",
 			PasswordHash: "must-not-leak",
 			TimeZone:     "Asia/Tokyo",

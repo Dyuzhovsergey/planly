@@ -15,6 +15,7 @@ import (
 const testOrigin = "http://localhost:8080"
 
 type fakeAuthService struct {
+	profile            auth.ProfileUpdate
 	result             auth.AuthResult
 	identity           auth.SessionIdentity
 	registerErr        error
@@ -59,10 +60,20 @@ func (service *fakeAuthService) UpdateTimeZone(_ context.Context, userID string,
 	return service.updatedUser, service.updateTimeZoneErr
 }
 
+func (service *fakeAuthService) UpdateProfile(_ context.Context, userID string, input auth.ProfileUpdate) (auth.User, error) {
+	service.updatedUserID = userID
+	service.profile = input
+	if input.TimeZone != nil {
+		service.updatedTimeZone = auth.UpdateTimeZoneInput{TimeZone: *input.TimeZone}
+	}
+	return service.updatedUser, service.updateTimeZoneErr
+}
+
 func TestRegisterSetsLocalSessionCookie(t *testing.T) {
 	service := &fakeAuthService{result: testAuthResult()}
 	router := newTestAuthRouter(service, false)
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", strings.NewReader(`{
+		"username":"sergey",
 		"email":"user@example.com",
 		"password":"correct horse battery staple",
 		"timeZone":"Europe/Moscow"
@@ -74,6 +85,9 @@ func TestRegisterSetsLocalSessionCookie(t *testing.T) {
 
 	if response.Code != http.StatusCreated {
 		t.Fatalf("status = %d, want %d; body=%s", response.Code, http.StatusCreated, response.Body.String())
+	}
+	if service.registered.Username != "sergey" || service.registered.Email != "user@example.com" {
+		t.Errorf("Register() input = %+v, want username and email", service.registered)
 	}
 	cookies := response.Result().Cookies()
 	if len(cookies) != 1 {
@@ -98,7 +112,7 @@ func TestLoginSetsProductionSessionCookie(t *testing.T) {
 	service := &fakeAuthService{result: testAuthResult()}
 	router := newTestAuthRouter(service, true)
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{
-		"email":"user@example.com",
+		"username":"sergey",
 		"password":"correct horse battery staple"
 	}`))
 	request.Header.Set("Origin", testOrigin)
@@ -109,6 +123,9 @@ func TestLoginSetsProductionSessionCookie(t *testing.T) {
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d; body=%s", response.Code, http.StatusOK, response.Body.String())
 	}
+	if service.loggedIn.Username != "sergey" {
+		t.Errorf("Login() username = %q, want sergey", service.loggedIn.Username)
+	}
 	cookie := response.Result().Cookies()[0]
 	if cookie.Name != productionSessionCookie || !cookie.Secure || !cookie.HttpOnly {
 		t.Errorf("unexpected production cookie attributes: %+v", cookie)
@@ -118,7 +135,7 @@ func TestLoginSetsProductionSessionCookie(t *testing.T) {
 func TestAuthRejectsWrongOrigin(t *testing.T) {
 	service := &fakeAuthService{result: testAuthResult()}
 	router := newTestAuthRouter(service, false)
-	request := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"email":"user@example.com","password":"password value here"}`))
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"sergey","password":"password value here"}`))
 	request.Header.Set("Origin", "https://attacker.example")
 	response := httptest.NewRecorder()
 
@@ -163,6 +180,7 @@ func TestAuthMapsDomainErrors(t *testing.T) {
 		code   string
 	}{
 		{name: "email conflict", err: auth.ErrEmailTaken, status: http.StatusConflict, code: "email_already_registered"},
+		{name: "username conflict", err: auth.ErrUsernameTaken, status: http.StatusConflict, code: "username_already_registered"},
 		{name: "invalid credentials", err: auth.ErrInvalidCredentials, status: http.StatusUnauthorized, code: "invalid_credentials"},
 		{name: "validation", err: &auth.ValidationError{Fields: map[string][]string{"email": {"invalid"}}}, status: http.StatusUnprocessableEntity, code: "validation_failed"},
 		{name: "internal", err: errors.New("database details"), status: http.StatusInternalServerError, code: "internal_error"},
@@ -172,7 +190,7 @@ func TestAuthMapsDomainErrors(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			service := &fakeAuthService{registerErr: test.err}
 			router := newTestAuthRouter(service, false)
-			request := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", strings.NewReader(`{"email":"user@example.com","password":"correct horse battery staple","timeZone":"Europe/Moscow"}`))
+			request := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", strings.NewReader(`{"username":"sergey","email":"user@example.com","password":"correct horse battery staple","timeZone":"Europe/Moscow"}`))
 			request.Header.Set("Origin", testOrigin)
 			response := httptest.NewRecorder()
 
@@ -206,6 +224,7 @@ func testAuthResult() auth.AuthResult {
 	return auth.AuthResult{
 		User: auth.User{
 			ID:        "user-id",
+			Username:  "sergey",
 			Email:     "user@example.com",
 			TimeZone:  "Europe/Moscow",
 			CreatedAt: time.Date(2026, time.October, 12, 10, 0, 0, 0, time.UTC),

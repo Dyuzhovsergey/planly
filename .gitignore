@@ -25,6 +25,11 @@ profile.cov
 go.work
 go.work.sum
 
+# Frontend dependencies and build artifacts
+node_modules/
+dist/
+coverage/
+
 # Environment files may contain passwords and API keys.
 .env
 .env.*

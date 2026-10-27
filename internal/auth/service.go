@@ -6,16 +6,22 @@ import (
 	"errors"
 	"io"
 	"net/mail"
+	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 const (
-	minimumPasswordLength = 15
+	minimumPasswordLength = 8
 	maximumPasswordLength = 128
+	minimumUsernameLength = 3
+	maximumUsernameLength = 32
 	maximumEmailLength    = 254
 	sessionLifetime       = 30 * 24 * time.Hour
 )
+
+var usernamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*[a-z0-9]$`)
 
 // Service applies authentication rules independently of HTTP and PostgreSQL.
 type Service struct {
@@ -46,9 +52,10 @@ func NewService(repository Repository) (*Service, error) {
 
 // Register validates a user and atomically persists the user with their first session.
 func (service *Service) Register(ctx context.Context, input RegisterInput) (AuthResult, error) {
+	username := normalizeUsername(input.Username)
 	email := normalizeEmail(input.Email)
 	timeZone := strings.TrimSpace(input.TimeZone)
-	if validationErr := validateRegistration(email, input.Password, timeZone); validationErr != nil {
+	if validationErr := validateRegistration(username, email, input.Password, timeZone); validationErr != nil {
 		return AuthResult{}, validationErr
 	}
 
@@ -63,6 +70,7 @@ func (service *Service) Register(ctx context.Context, input RegisterInput) (Auth
 	}
 
 	user, err := service.repository.CreateUserAndSession(ctx, CreateUserParams{
+		Username:     username,
 		Email:        email,
 		PasswordHash: passwordHash,
 		TimeZone:     timeZone,
@@ -81,12 +89,12 @@ func (service *Service) Register(ctx context.Context, input RegisterInput) (Auth
 
 // Login verifies credentials and creates a new independent session.
 func (service *Service) Login(ctx context.Context, input LoginInput) (AuthResult, error) {
-	email := normalizeEmail(input.Email)
-	if email == "" || input.Password == "" {
+	username := normalizeUsername(input.Username)
+	if username == "" || input.Password == "" {
 		return AuthResult{}, ErrInvalidCredentials
 	}
 
-	user, err := service.repository.FindUserByEmail(ctx, email)
+	user, err := service.repository.FindUserByUsername(ctx, username)
 	if errors.Is(err, ErrNotFound) {
 		_, _ = service.passwords.Verify(input.Password, service.dummyHash)
 		return AuthResult{}, ErrInvalidCredentials
@@ -187,21 +195,53 @@ func (service *Service) Authenticate(ctx context.Context, sessionToken string) (
 
 // UpdateTimeZone validates and persists the current user's calendar time zone.
 func (service *Service) UpdateTimeZone(ctx context.Context, userID string, input UpdateTimeZoneInput) (User, error) {
-	timeZone := strings.TrimSpace(input.TimeZone)
-	if !isValidTimeZone(timeZone) {
-		return User{}, &ValidationError{Fields: map[string][]string{
-			"timeZone": {"must be a valid IANA time zone"},
-		}}
-	}
+	return service.UpdateProfile(ctx, userID, ProfileUpdate{TimeZone: &input.TimeZone})
+}
 
-	user, err := service.repository.UpdateUserTimeZone(ctx, userID, timeZone)
+// UpdateProfile validates every supplied preference before one owner-scoped update.
+// It neither replaces the session nor modifies calendar records.
+func (service *Service) UpdateProfile(ctx context.Context, userID string, input ProfileUpdate) (User, error) {
+	fields := make(map[string][]string)
+	params := ProfileUpdate{}
+	if input.DisplayName != nil {
+		value := strings.TrimSpace(*input.DisplayName)
+		if !utf8.ValidString(value) || utf8.RuneCountInString(value) > 100 || strings.ContainsRune(value, 0) {
+			fields["displayName"] = []string{"must contain at most 100 characters without NUL"}
+		}
+		params.DisplayName = &value
+	}
+	if input.TimeZone != nil {
+		value := strings.TrimSpace(*input.TimeZone)
+		if !isValidTimeZone(value) {
+			fields["timeZone"] = []string{"must be a valid IANA time zone"}
+		}
+		params.TimeZone = &value
+	}
+	if input.WeekStartsOn != nil {
+		value := *input.WeekStartsOn
+		if value != "monday" && value != "sunday" {
+			fields["weekStartsOn"] = []string{"must be monday or sunday"}
+		}
+		params.WeekStartsOn = &value
+	}
+	if input.TimeFormat != nil {
+		value := *input.TimeFormat
+		if value != "12h" && value != "24h" {
+			fields["timeFormat"] = []string{"must be 12h or 24h"}
+		}
+		params.TimeFormat = &value
+	}
+	if input.DisplayName == nil && input.TimeZone == nil && input.WeekStartsOn == nil && input.TimeFormat == nil {
+		fields["body"] = []string{"must contain at least one editable field"}
+	}
+	if len(fields) > 0 {
+		return User{}, &ValidationError{Fields: fields}
+	}
+	user, err := service.repository.UpdateUserProfile(ctx, userID, params)
 	if errors.Is(err, ErrNotFound) {
 		return User{}, ErrUnauthenticated
 	}
-	if err != nil {
-		return User{}, err
-	}
-	return user, nil
+	return user, err
 }
 
 func (service *Service) createSession(userID string) (Session, string, string, error) {
@@ -226,15 +266,22 @@ func normalizeEmail(email string) string {
 	return strings.ToLower(strings.TrimSpace(email))
 }
 
-func validateRegistration(email, password, timeZone string) *ValidationError {
+func normalizeUsername(username string) string {
+	return strings.ToLower(strings.TrimSpace(username))
+}
+
+func validateRegistration(username, email, password, timeZone string) *ValidationError {
 	fields := make(map[string][]string)
 
+	if length := len(username); length < minimumUsernameLength || length > maximumUsernameLength || !usernamePattern.MatchString(username) {
+		fields["username"] = []string{"must contain 3 to 32 lowercase Latin letters, digits, dots, underscores, or hyphens and start and end with a letter or digit"}
+	}
 	parsedEmail, err := mail.ParseAddress(email)
 	if err != nil || parsedEmail.Address != email || len(email) > maximumEmailLength {
 		fields["email"] = []string{"must be a valid email address"}
 	}
 	if length := len([]rune(password)); length < minimumPasswordLength || length > maximumPasswordLength {
-		fields["password"] = []string{"must contain between 15 and 128 characters"}
+		fields["password"] = []string{"must contain between 8 and 128 characters"}
 	}
 	if !isValidTimeZone(timeZone) {
 		fields["timeZone"] = []string{"must be a valid IANA time zone"}
@@ -247,6 +294,9 @@ func validateRegistration(email, password, timeZone string) *ValidationError {
 }
 
 func isValidTimeZone(timeZone string) bool {
+	if timeZone == "" || timeZone == "Local" {
+		return false
+	}
 	_, err := time.LoadLocation(timeZone)
 	return err == nil
 }
