@@ -13,7 +13,7 @@ Planly — личный календарный веб-сервис с отдел
 - Frontend: React, TypeScript, Vite, Tailwind CSS, shadcn/ui.
 - Calendar: FullCalendar Standard v7; `temporal-polyfill` используется для явных преобразований между IANA-зоной пользователя и точными моментами времени.
 - Локальная разработка и развёртывание: Docker Compose.
-- Планируемый продакшен: домашний Raspberry Pi, Caddy и бесплатный DNS-поддомен; настройка временно отложена.
+- Планируемый продакшен: домашний Raspberry Pi, Caddy и бесплатный DNS-поддомен; пользователь вернулся к подготовке SD-карты, развёртывание ещё не выполнено.
 
 **Важно:** Planly — веб-приложение. Отдельный Linux desktop-клиент и Tauri не планируются.
 
@@ -21,7 +21,7 @@ Planly — личный календарный веб-сервис с отдел
 
 Минимальные модели `User` и `Task`, правила времени, аутентификация и REST API согласованы. API предоставляет диагностику, регистрацию, вход, получение и изменение часовой зоны текущего пользователя через `/api/v1/me`, выход и защищённый CRUD timed/all-day задач. Frontend на React + TypeScript + Vite восстанавливает текущего пользователя и показывает адаптивный bento-dashboard с календарём месяц/неделя/день, быстрым созданием и ближайшими задачами. Задачи можно редактировать, переносить, завершать, открывать повторно и удалять из agenda после подтверждения; основной frontend CRUD принят после ручной браузерной проверки. PostgreSQL, миграции, API и production-сборка frontend запускаются через Docker Compose; frontend-контейнер и локальный reverse proxy приняты после ручной браузерной проверки.
 
-Месячная доска задач и поиск приняты пользователем. Для `Event` и `Birthday` описаны целевые API-контракты; у Event реализованы модель, миграция, service и полный HTTP CRUD `/api/v1/events` и UI, принятый пользователем после браузерной проверки. Birthday backend реализован: защищённый CRUD `/api/v1/birthdays` и вычисляемые ежегодные появления `/api/v1/birthdays/occurrences`; UI Birthday реализован и принят пользователем 2026-10-23; базовые настройки профиля/календаря приняты. Фото и пять готовых аватаров реализованы и приняты пользователем 2026-10-23; backend повторов Task/Event принят; UI повторов упрощён на `codex/recurrence-simple`, добавлены месячные и ежегодные правила; принято пользователем 2026-10-26. Алиса и Web Push ещё не реализованы. Публичный HTTPS временно отложен пользователем; выбранный план реальной привязки Алисы сохраняется: домашний Raspberry Pi, белый IP и бесплатное DNS-имя; развёртывание ещё не выполнено. Актуальный статус и следующий шаг — в [плане разработки](docs/DEVELOPMENT_PLAN.md#текущий-статус), поведение новых ресурсов — в [API-контракте](docs/API.md#целевые-контракты-event-и-birthday).
+Месячная доска задач и поиск приняты пользователем. Для `Event` и `Birthday` описаны целевые API-контракты; у Event реализованы модель, миграция, service и полный HTTP CRUD `/api/v1/events` и UI, принятый пользователем после браузерной проверки. Birthday backend реализован: защищённый CRUD `/api/v1/birthdays` и вычисляемые ежегодные появления `/api/v1/birthdays/occurrences`; UI Birthday реализован и принят пользователем 2026-10-23; базовые настройки профиля/календаря приняты. Фото и пять готовых аватаров реализованы и приняты пользователем 2026-10-23; backend повторов Task/Event принят; UI повторов упрощён на `codex/recurrence-simple`, добавлены месячные и ежегодные правила; принято пользователем 2026-10-26. Алиса и Web Push ещё не реализованы. Пользователь вернулся к подготовке Raspberry Pi для публичного HTTPS; выбранный план реальной привязки Алисы сохраняется: домашний Raspberry Pi, белый IP и бесплатное DNS-имя; развёртывание ещё не выполнено. Актуальный статус и следующий шаг — в [плане разработки](docs/DEVELOPMENT_PLAN.md#текущий-статус), поведение новых ресурсов — в [API-контракте](docs/API.md#целевые-контракты-event-и-birthday).
 
 Раздел `/events` содержит месячный список с вкладками «Предстоящие / Прошедшие», поиском, просмотром, созданием, изменением и удалением после подтверждения. Общий календарь `/app` показывает задачи и мероприятия, переключатели их видимости и выбор типа через `+`. Мероприятия изменяются через форму.
 
@@ -441,4 +441,129 @@ curl -i -b /tmp/planly-cookie.txt -H "Origin: $RECURRENCE_ORIGIN" \
 3. Откройте одну заметку в двух вкладках, сохраните первую, затем вторую → вместо перезаписи появляется конфликт, черновик остаётся. «Загрузить последнюю версию» запрашивает подтверждение.
 4. Проверьте отмену, Escape и крестик после правки → предупреждение; сетевую ошибку → черновик остаётся; удаление → подтверждение. Действия создают/меняют данные вашего аккаунта; удаляйте только свои тестовые записи. Проверьте телефон и Tab/Shift+Tab.
 
-Настройка Raspberry Pi и публичного HTTPS временно отложена пользователем.
+После паузы пользователь вернулся к подготовке SD-карты для Raspberry Pi; публичный HTTPS ещё не настроен.
+
+## Подготовка Raspberry Pi: Docker
+
+Проверено по выводу пользователя 2026-10-27: Pi 4 Model B, Debian 13 (trixie), ARM64, около 4 ГБ RAM, SD 128 ГБ; SSH `ssh sergey@192.168.1.50` работает через Ethernet. Wi-Fi и закрепление LAN-адреса пока не подтверждены. Устройство может обслуживать и другие проекты; Planly использует отдельный Compose-проект.
+
+Актуальная диагностика сети: `eth0=172.16.50.2/24`, `wlan0 DOWN`, нет default route — интернет пока отсутствует. Прежний SSH-адрес выше относится к первоначальному подключению. Сначала настроить Wi-Fi, сохраняя eth0 и действующий SSH-сеанс. Если NetworkManager доступен (`nmcli --version`), выполнить:
+
+```bash
+sudo nmcli radio wifi on
+nmcli device wifi list ifname wlan0
+sudo nmcli --ask device wifi connect "ИМЯ_ВАШЕЙ_СЕТИ" ifname wlan0
+```
+
+Замените имя сети своим SSID; пароль вводится локально по запросу, не в команде и не в чате. Ошибки вроде отсутствующего nmcli, заблокированного радио или пустого списка сетей требуют диагностики; не менять eth0, не перезапускать NetworkManager и не перезагружать Raspberry для этого шага. После подключения проверить `ip route`, `ping -c 3 1.1.1.1`, `getent hosts deb.debian.org`. При отсутствии маршрута/связности установку пакетов не начинать. [Официальная инструкция Wi-Fi](https://www.raspberrypi.com/documentation/computers/configuration.html).
+
+Docker Engine и Compose plugin устанавливаются **на Raspberry по SSH**, не на ноутбуке, по [официальной инструкции Debian](https://docs.docker.com/engine/install/debian/). Debian 13/arm64 поддерживаются. Для свежей системы без уже установленного Docker:
+
+```bash
+sudo apt update
+sudo apt install -y ca-certificates curl
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+sudo tee /etc/apt/sources.list.d/docker.sources > /dev/null <<EOF
+Types: deb
+URIs: https://download.docker.com/linux/debian
+Suites: trixie
+Components: stable
+Architectures: arm64
+Signed-By: /etc/apt/keyrings/docker.asc
+EOF
+sudo apt update
+sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+sudo systemctl enable --now docker
+```
+
+Проверка:
+
+```bash
+sudo docker version
+sudo docker compose version
+sudo docker run --rm hello-world
+```
+
+Ожидаются Client/Server без ошибок, версия Compose и `Hello from Docker!`. Пользователь подтвердил успешный hello-world arm64v8 и версии Docker Engine 29.9.2 linux/arm64, Compose v5.6.1. Интернет временно через точку доступа телефона; домашний Wi-Fi ещё не настроен. Группа docker не настраивается автоматически; команды пока с sudo. На этом шаге Planly не запускается, миграции/порты/роутер не меняются. До запуска нужно проверить ARM64-образы и подготовить конфигурацию сервера: исходный compose.yaml публикует PostgreSQL на host-порту и рассчитан на локальную разработку.
+
+### Перенос исходников с ноутбука на Raspberry
+
+`/home/sergey/dev/planly` — каталог ноутбука, не Raspberry. На Raspberry используется отдельный `~/apps/planly`; для перехода в папку нужна команда `cd`. Ниже последний известный Ethernet-адрес Raspberry — `172.16.50.2`; если вы подключаетесь по другому адресу, замените его в команде.
+
+Сначала **на Raspberry по SSH**:
+
+```bash
+sudo apt install -y rsync
+mkdir -p ~/apps/planly
+```
+
+Затем **в отдельном терминале ноутбука, вне SSH**:
+
+```bash
+rsync -az --info=progress2 \
+  --exclude='.git/' \
+  --exclude='node_modules/' \
+  --exclude='dist/' \
+  --include='.env.example' \
+  --exclude='.env*' \
+  /home/sergey/dev/planly/ \
+  sergey@172.16.50.2:~/apps/planly/
+```
+
+Это копия текущего рабочего каталога, включая незакоммиченные исходники; локальные .env исключены, .env.example сохранён. Без `--delete`: существующие файлы назначения не удаляются. Для первого переноса используется новая папка. После копирования **на Raspberry**:
+
+```bash
+cd ~/apps/planly
+pwd
+ls -l compose.yaml Dockerfile web/Dockerfile
+```
+
+2026-10-27 пользователь подтвердил перенос: /home/sergey/apps/planly и Dockerfile/compose.yaml/web/Dockerfile присутствуют. Обычный dev Compose не запускать до подготовки отдельной серверной конфигурации и собственных параметров БД. ARM64 manifests всех пяти базовых образов проверены агентом через `docker buildx imagetools inspect`; сборка и первый закрытый запуск Planly на Raspberry подтверждены пользователем.
+
+## Первый запуск на Raspberry через SSH-туннель
+
+`compose.server.yaml` — самостоятельная серверная конфигурация. Используйте только её (`-f compose.server.yaml`), не объединяйте с compose.yaml. Проект `planly-server` имеет отдельный volume, БД/API без опубликованных портов, web слушает только 127.0.0.1:5173 на Raspberry. Контейнеры автоматически перезапускаются, логи ограничены. Это начальная закрытая проверка; публичный HTTPS пока не включён.
+
+После добавления новых файлов повторите rsync из раздела выше **на ноутбуке**. Он не затронет серверный .env.server. Затем **на Raspberry по SSH**:
+
+```bash
+cd ~/apps/planly
+sh scripts/init-server-env.sh
+sudo docker compose --env-file .env.server -f compose.server.yaml config --quiet
+sudo docker compose --env-file .env.server -f compose.server.yaml build api
+sudo docker compose --env-file .env.server -f compose.server.yaml build web
+sudo docker compose --env-file .env.server -f compose.server.yaml up -d --wait --wait-timeout 180
+sudo docker compose --env-file .env.server -f compose.server.yaml ps -a
+```
+
+Генератор создаёт .env.server с режимом 600 и случайным hex-паролем, не выводит пароль и не заменяет существующий файл. Начальные APP_ORIGIN=http://localhost:15173 и COOKIE_SECURE=false предназначены только для проверки через SSH-туннель. При существующем .env.server генератор сообщит об отказе перезаписи; проверьте/используйте уже созданные настройки. Сохраняйте .env.server вместе с резервными копиями: генерация другого пароля не изменит пароль уже созданной БД. Не отправляйте файл или пароль в чат/Git.
+
+Сборки идут последовательно для снижения пика RAM; первый запуск скачивает образы и зависимости через текущий интернет (сейчас точку телефона). Он создаёт новую отдельную БД **на Raspberry** и применяет миграции 001–012. Данные/аккаунты ноутбука автоматически не переносятся. На Raspberry это первое применение; миграция 012 ранее проверена на отдельной тестовой БД.
+
+**На ноутбуке в отдельном терминале** откройте туннель (адрес Raspberry замените при необходимости):
+
+```bash
+ssh -N -o ExitOnForwardFailure=yes -L 127.0.0.1:15173:127.0.0.1:5173 sergey@172.16.50.2
+```
+
+Терминал остаётся занят — это ожидаемо. Откройте именно `http://localhost:15173`: это порт ноутбука, передающий запросы на Raspberry. Проверка: регистрация отдельного тестового аккаунта → создание записи → refresh → запись сохранена. `migrate` должен завершиться с кодом 0, postgres/api/web — healthy. При неудаче сборки/миграции остановитесь; диагностика:
+
+```bash
+sudo docker compose --env-file .env.server -f compose.server.yaml logs --tail 50
+```
+
+Не выполняйте `down -v` или удаление volume: это удалит серверную БД. Для будущего HTTPS потребуются домен/Caddy, HTTPS APP_ORIGIN и COOKIE_SECURE=true, затем отдельная проверка; не публикуйте текущий HTTP-порт на роутере.
+
+### Как посмотреть серверные контейнеры
+
+2026-10-27 пользователь подтвердил запуск на Raspberry: postgres/api/web healthy, migrate Exited (0), Planly открывается через SSH-туннель. Пользователь также подтвердил создание записей: всё работает. Полный CRUD и перезапуск самого Pi отдельно не проверялись.
+
+Из ~/apps/planly используйте:
+
+```bash
+sudo docker compose --env-file .env.server -f compose.server.yaml ps -a
+```
+
+Простой docker compose ps -a читает compose.yaml разработки и выбирает проект planly по имени каталога. Серверный файл явно задаёт другой проект — planly-server. Пустой список dev-проекта не означает остановку серверных контейнеров. Все контейнеры хоста независимо от проекта показывает sudo docker ps -a; для управления Planly сохраняйте серверные флаги.

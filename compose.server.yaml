@@ -1,0 +1,110 @@
+# Standalone server stack; do not merge with compose.yaml.
+name: planly-server
+
+services:
+  postgres:
+    image: postgres:18.6-alpine3.24
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    environment:
+      POSTGRES_DB: planly
+      POSTGRES_USER: planly
+      POSTGRES_PASSWORD: ${PLANLY_POSTGRES_PASSWORD:?Run sh scripts/init-server-env.sh first}
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 30s
+
+  migrate:
+    image: planly-server-api:local
+    pull_policy: never
+    command: ["/app/planly-migrate", "up"]
+    environment:
+      DATABASE_URL: "postgres://planly:${PLANLY_POSTGRES_PASSWORD:?Run sh scripts/init-server-env.sh first}@postgres:5432/planly?sslmode=disable"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: "no"
+
+  api:
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: planly-server-api:local
+    environment:
+      HTTP_ADDR: ":8080"
+      DATABASE_URL: "postgres://planly:${PLANLY_POSTGRES_PASSWORD:?Run sh scripts/init-server-env.sh first}@postgres:5432/planly?sslmode=disable"
+      APP_ORIGIN: ${PLANLY_APP_ORIGIN:?Set PLANLY_APP_ORIGIN in .env.server}
+      COOKIE_SECURE: ${PLANLY_COOKIE_SECURE:?Set PLANLY_COOKIE_SECURE in .env.server}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 30s
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 10s
+
+  web:
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    image: planly-server-web:local
+    ports:
+      - "127.0.0.1:${PLANLY_WEB_PORT:-5173}:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 30s
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 10s
+
+volumes:
+  postgres_data:
