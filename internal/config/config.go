@@ -2,7 +2,9 @@
 package config
 
 import (
+	"encoding/hex"
 	"errors"
+	"github.com/Dyuzhovsergey/planly/internal/oauth"
 	"net/url"
 	"os"
 	"strconv"
@@ -12,6 +14,7 @@ const defaultHTTPAddr = ":8080"
 
 // Config contains the settings required to start the API.
 type Config struct {
+	OAuth        oauth.Config
 	HTTPAddr     string
 	DatabaseURL  string
 	AppOrigin    string
@@ -47,6 +50,14 @@ func Load() (Config, error) {
 		config.CookieSecure = cookieSecure
 	}
 
+	config.OAuth = oauth.Config{ClientID: os.Getenv("ALICE_CLIENT_ID"), SecretHash: os.Getenv("ALICE_CLIENT_SECRET_SHA256"), SkillID: os.Getenv("ALICE_SKILL_ID")}
+	c := config.OAuth
+	if c.ClientID != "" || c.SecretHash != "" || c.SkillID != "" {
+		hash, err := hex.DecodeString(c.SecretHash)
+		if c.ClientID == "" || len(c.ClientID) > 200 || c.SkillID == "" || len(c.SkillID) > 200 || err != nil || len(hash) != 32 || hex.EncodeToString(hash) != c.SecretHash {
+			return Config{}, errors.New("ALICE_CLIENT_ID, ALICE_CLIENT_SECRET_SHA256 (lowercase SHA-256 hex) and ALICE_SKILL_ID must be configured together")
+		}
+	}
 	return config, nil
 }
 

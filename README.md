@@ -567,3 +567,66 @@ sudo docker compose --env-file .env.server -f compose.server.yaml ps -a
 ```
 
 Простой docker compose ps -a читает compose.yaml разработки и выбирает проект planly по имени каталога. Серверный файл явно задаёт другой проект — planly-server. Пустой список dev-проекта не означает остановку серверных контейнеров. Все контейнеры хоста независимо от проекта показывает sudo docker ps -a; для управления Planly сохраняйте серверные флаги.
+
+## Подготовленный домен и будущий HTTPS
+
+Пользователь зарегистрировал `planly-planly.duckdns.org`. Конфигурация `deploy/Caddyfile` подготовлена для **Caddy как сервиса Raspberry**, не для отдельного контейнера: upstream — 127.0.0.1:5173. Публичный HTTPS ещё не настроен; пока пользователь вне дома, Planly доступен по прежнему SSH-туннелю.
+
+Дальнейшие действия выполняются дома: подключение домашнего Wi-Fi, закрепление LAN-адреса Wi-Fi-интерфейса на ASUS RT-AC59U V2, проверка публичного WAN IP и привязка A-записи DuckDNS к нему. Не добавлять AAAA без проверенного IPv6. После сохранения резервных копий БД/.env.server — установка Caddy с сохранением уже существующих сайтов, проверка конфигурации и перенаправление TCP 80/443 на Raspberry. PostgreSQL/API и порт 5173 на роутере не публикуются.
+
+При готовом HTTPS в **существующем** .env.server меняются только параметры доступа:
+
+```dotenv
+PLANLY_APP_ORIGIN=https://planly-planly.duckdns.org
+PLANLY_COOKIE_SECURE=true
+```
+
+Пароль БД и PLANLY_WEB_PORT сохраняются. Переключение этих настроек до готовности HTTPS нарушит тестовый вход через HTTP-туннель, поэтому пока их не менять. Для нового домена потребуется заново войти в аккаунт Raspberry; данные в его БД сохраняются. Приёмка: доверенный HTTPS без предупреждений, регистрация/вход, создание записи/refresh и открытие с мобильного интернета вне домашней LAN.
+
+Справка: [автоматический HTTPS Caddy](https://caddyserver.com/docs/automatic-https), [DuckDNS API](https://www.duckdns.org/spec.jsp). Token DuckDNS хранится только у пользователя/на сервере с ограниченными правами, не в Git или чате. Автоматическое обновление DNS выбирается после проверки, меняется ли домашний публичный IP.
+
+### Домашняя сеть: актуальное подключение
+
+Пользователь подтвердил домашний Wi-Fi SSH `ssh sergey@192.168.50.114` и доступ к ASUS RT-AC59U V2. Предыдущие 172.16.50.2/192.168.1.50 относятся к прошлым подключениям. До проброса портов получить на Raspberry активный Wi-Fi MAC (`cat /sys/class/net/wlan0/address`), default route (`ip -4 route`), внешний IPv4 (`curl -4 --max-time 15 -w '\n' https://api.ipify.org`) и DNS (`getent ahostsv4 planly-planly.duckdns.org`).
+
+На ASUS: LAN → DHCP Server → Enable Manual Assignment → Wi-Fi MAC Raspberry и текущий 192.168.50.114 → Apply. Сверить WAN IPv4 в роутере с внешним IPv4 Raspberry; при расхождении сначала выяснить наличие второго NAT/CGNAT/VPN. Проверить уже занятые сервисами порты (`sudo ss -ltnp '( sport = :80 or sport = :443 )'`) и наличие Caddy (`command -v caddy`), чтобы не заменить чужую конфигурацию. DNS и установка Caddy продолжаются после этой проверки.
+
+Агент пока не имеет SSH-доступа по ключу (BatchMode получил Permission denied); приведённые команды выполняются пользователем. Секреты SSH, Wi-Fi и DuckDNS в чат не передавать.
+
+### Привязка Алисы: настройка после HTTPS
+
+Локальный код account-linking реализован; реальная связка в Яндекс Диалогах ещё не принята. Голосовое создание и чтение расписания выключены. Серверные параметры OAuth опциональны: без полного набора ALICE_* новые маршруты не регистрируются. Точный контракт — `docs/API.md`, раздел Алисы.
+
+1. В [Яндекс Диалогах](https://dialogs.yandex.ru/developer/) создать черновик навыка Алисы. Получить ID навыка (UUID). Не отправлять на модерацию для первой проверки.
+2. После переноса новой версии проекта на Raspberry, из `~/apps/planly` выполнить:
+
+   ```bash
+   python3 scripts/init-alice-env.py ID_НАВЫКА
+   ```
+
+   Создаются `.env.alice` (client ID, SHA-256 хеш секрета, skill ID) и `.env.alice-secret` (значение секрета для консоли), оба с правами 600. Повторный запуск отказывается перезаписывать файлы. Эти файлы исключены из Git; в rsync по-прежнему исключать `.env*`. Секрет смотреть только локально в редакторе и перенести в поле консоли Яндекса; не присылать в чат. Клиентский ID — `planly-alice`. Сам API получает только хеш, не открытый секрет.
+3. Перед обновлением сервера сохранить отдельную резервную копию БД и существующего `.env.server`. **Миграция 013 сначала проверяется на отдельной БД**; автоматическая проверка разработчика не обновляет Raspberry. Для новой сборки/миграции запускать серверный Compose с обоими env-файлами:
+
+   ```bash
+   sudo docker compose --env-file .env.server --env-file .env.alice -f compose.server.yaml config --quiet
+   sudo docker compose --env-file .env.server --env-file .env.alice -f compose.server.yaml build
+   sudo docker compose --env-file .env.server --env-file .env.alice -f compose.server.yaml up -d --wait
+   sudo docker compose --env-file .env.server --env-file .env.alice -f compose.server.yaml restart web
+   ```
+
+   При последующих операциях сохранять оба `--env-file`: запуск без `.env.alice` отключит OAuth после пересоздания API. Последний restart web обновляет разрешение внутреннего адреса API в Nginx. Не менять пароль PostgreSQL и имя Compose-проекта; не выполнять `down -v`. Caddy и его сертификаты сохраняются.
+4. В настройках навыка задать webhook `https://planly-planly.duckdns.org/api/v1/integrations/alice/webhook`. На вкладке связки аккаунтов:
+
+   | Поле | Значение |
+   |---|---|
+   | Идентификатор приложения | `planly-alice` |
+   | Секрет приложения | из `.env.alice-secret` |
+   | URL авторизации | `https://planly-planly.duckdns.org/oauth/authorize` |
+   | URL получения токена | `https://planly-planly.duckdns.org/oauth/token` |
+   | URL обновления токена | тот же `/oauth/token` |
+   | Группа действий / scope | `planly:voice:create` |
+
+   Callback разрешён только `https://social.yandex.net/broker/redirect`. Внешние query-токены не поддерживаются. Метод client authentication: Basic либо form-urlencoded, не оба одновременно. Поддерживается PKCE S256 при переданном challenge. Фактический обмен Диалогов, включая PKCE, проверяется на реальном навыке, не предполагается по документации.
+5. Браузерная/платформенная приёмка: открыть навык → запрос привязки → вход существующим аккаунтом Planly → проверить имя аккаунта и явное согласие/отказ → возврат в Алису → нейтральное подтверждение привязки. В Planly «Настройки → Алиса» должна появиться привязка. Отключить её, повторить обращение: старые токены больше не должны подтверждать доступ. Проверить два аккаунта, refresh и возврат на страницу согласия. Никакие задачи/мероприятия/дни рождения создаваться не должны. Приложение и Станция требуют отдельных проверок; голос на колонке не доказывает личность говорящего.
+
+[Требования сервера авторизации](https://yandex.ru/dev/dialogs/alice/doc/ru/auth/create-server), [связка в консоли](https://yandex.ru/dev/dialogs/alice/doc/ru/auth/add-skill-to-console), [поведение webhook](https://yandex.ru/dev/dialogs/alice/doc/ru/auth/make-skill).

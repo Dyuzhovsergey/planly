@@ -57,6 +57,10 @@ services:
       DATABASE_URL: "postgres://planly:${PLANLY_POSTGRES_PASSWORD:?Run sh scripts/init-server-env.sh first}@postgres:5432/planly?sslmode=disable"
       APP_ORIGIN: ${PLANLY_APP_ORIGIN:?Set PLANLY_APP_ORIGIN in .env.server}
       COOKIE_SECURE: ${PLANLY_COOKIE_SECURE:?Set PLANLY_COOKIE_SECURE in .env.server}
+      # Optional: add --env-file .env.alice after --env-file .env.server.
+      ALICE_CLIENT_ID: ${ALICE_CLIENT_ID:-}
+      ALICE_CLIENT_SECRET_SHA256: ${ALICE_CLIENT_SECRET_SHA256:-}
+      ALICE_SKILL_ID: ${ALICE_SKILL_ID:-}
     depends_on:
       migrate:
         condition: service_completed_successfully

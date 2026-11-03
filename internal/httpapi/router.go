@@ -3,6 +3,7 @@ package httpapi
 
 import (
 	"context"
+	"github.com/Dyuzhovsergey/planly/internal/oauth"
 	"github.com/Dyuzhovsergey/planly/internal/recurrence"
 	"net/http"
 )
@@ -14,6 +15,7 @@ type ReadinessChecker interface {
 
 // Dependencies contains explicitly assembled HTTP-layer dependencies.
 type Dependencies struct {
+	OAuth      *oauth.Service
 	Recurrence RecurrenceService
 	Avatars    AvatarService
 	Database   ReadinessChecker
@@ -33,6 +35,18 @@ func NewRouter(dependencies Dependencies) http.Handler {
 
 	if dependencies.Auth != nil {
 		auth := newAuthHandler(dependencies.Auth, dependencies.AuthConfig)
+		if dependencies.OAuth != nil {
+			h := &oauthHandler{dependencies.OAuth}
+			router.HandleFunc("POST /oauth/token", h.token)
+			router.HandleFunc("POST /oauth/revoke", h.token)
+			router.HandleFunc("POST /api/v1/integrations/alice/webhook", h.webhook)
+			for _, route := range []string{"GET /api/v1/oauth/authorization-requests/{id}", "GET /api/v1/me/oauth-grants"} {
+				router.Handle(route, auth.requireSession(http.HandlerFunc(h.browser)))
+			}
+			for _, route := range []string{"POST /api/v1/oauth/authorization-requests", "POST /api/v1/oauth/authorization-requests/{id}/decision", "DELETE /api/v1/me/oauth-grants/{id}"} {
+				router.Handle(route, auth.requireOrigin(auth.requireSession(auth.requireCSRF(http.HandlerFunc(h.browser)))))
+			}
+		}
 		router.HandleFunc("POST /api/v1/auth/register", auth.register)
 		router.HandleFunc("POST /api/v1/auth/login", auth.login)
 		router.HandleFunc("POST /api/v1/auth/logout", auth.logout)

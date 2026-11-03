@@ -77,3 +77,19 @@ func TestLoadRejectsOriginWithPath(t *testing.T) {
 		t.Fatal("Load() error = nil, want an error")
 	}
 }
+
+func TestOAuthConfigRequiresCompleteRegistration(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://example")
+	t.Setenv("APP_ORIGIN", "https://planly.example")
+	t.Setenv("ALICE_CLIENT_ID", "client")
+	t.Setenv("ALICE_CLIENT_SECRET_SHA256", "")
+	t.Setenv("ALICE_SKILL_ID", "")
+	if _, e := Load(); e == nil {
+		t.Fatal("partial OAuth config accepted")
+	}
+	t.Setenv("ALICE_CLIENT_SECRET_SHA256", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+	t.Setenv("ALICE_SKILL_ID", "skill")
+	if _, e := Load(); e != nil {
+		t.Fatal(e)
+	}
+}

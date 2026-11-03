@@ -18,6 +18,7 @@ import (
 	"github.com/Dyuzhovsergey/planly/internal/event"
 	"github.com/Dyuzhovsergey/planly/internal/httpapi"
 	"github.com/Dyuzhovsergey/planly/internal/note"
+	"github.com/Dyuzhovsergey/planly/internal/oauth"
 	"github.com/Dyuzhovsergey/planly/internal/platform/postgres"
 	"github.com/Dyuzhovsergey/planly/internal/recurrence"
 	"github.com/Dyuzhovsergey/planly/internal/task"
@@ -54,9 +55,14 @@ func run() error {
 	eventService := event.NewService(postgres.NewEventRepository(database))
 	birthdayService := birthday.NewService(postgres.NewBirthdayRepository(database))
 
+	var oauthService *oauth.Service
+	if appConfig.OAuth.ClientID != "" {
+		oauthService = oauth.NewService(postgres.NewOAuthRepository(database), appConfig.OAuth)
+	}
 	server := &http.Server{
 		Addr: appConfig.HTTPAddr,
 		Handler: httpapi.NewRouter(httpapi.Dependencies{
+			OAuth:      oauthService,
 			Recurrence: recurrence.NewService(postgres.NewRecurrenceRepository(database)),
 			Avatars:    avatar.NewService(postgres.NewAvatarRepository(database)),
 			Database:   database,

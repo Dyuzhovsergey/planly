@@ -618,7 +618,7 @@ GET отдельной серии/повторения и успешный POST/
 
 ## Целевой контракт Алисы и привязки аккаунта
 
-**Статус на 2026-10-26:** документационный контракт на согласованной `codex/alice-contracts`. Ничего из этого раздела не реализовано: OAuth server, новые routes, grants, webhook, серверные черновики и защита от дублей отсутствуют. Действующие cookie/CSRF Task/Event/Birthday API не меняются. Документальная проверка платформы выполнена; консоль, реальные устройства и HTTPS не проверялись. Реализация требует отдельного согласованного блока.
+**Статус на 2026-10-29:** OAuth/account-linking часть реализована на `codex/alice-account-linking`: authorization-requests, явное решение, token/refresh/revoke, grants и минимальный webhook проверки привязки. React `/oauth/authorize` и управление привязками в настройках реализованы. Маршруты API включаются только при полном наборе `ALICE_CLIENT_ID`, `ALICE_CLIENT_SECRET_SHA256`, `ALICE_SKILL_ID`; без него старые функции работают как прежде. Ниже OAuth endpoints описывают реализованный контракт; разделы голосовых черновиков, voice-create, receipt/dedup остаются целевыми и не реализованы. Реального навыка ещё нет, совместимость и приёмка в Яндекс Диалогах ожидаются. Browser API сохраняет cookie/Origin/CSRF, webhook не использует browser-cookie.
 
 ### Проверено по документации платформы
 
@@ -630,27 +630,27 @@ GET отдельной серии/повторения и успешный POST/
 | `session.user.user_id` относится к паре пользователь Яндекса/навык; `session.application.application_id` — к приложению; старое session.user_id не использовать. screen — возможность экрана, meta.client_id не рекомендован | [Формат запроса](https://yandex.ru/dev/dialogs/alice/doc/ru/request). Эти поля не являются владельцем Planly и не доказывают личность говорящего. |
 | Ожидание ответа — 4,5 секунды вместе с сетью | [Формат ответа](https://yandex.ru/dev/dialogs/alice/doc/ru/response). Внутренний бюджет меньше, нет длительной синхронной обработки. |
 | Для webhook нужен HTTPS с полной цепочкой доверенного сертификата | [Настройки публикации](https://yandex.ru/dev/dialogs/alice/doc/ru/publish-settings). Самоподписанный сертификат не подходит; локальный localhost не заменяет приёмку платформы. |
-| В консоли настраиваются client ID/secret, URL авторизации, выдачи/обновления токенов и разрешения | [Связка аккаунтов](https://yandex.ru/dev/dialogs/alice/doc/ru/auth/add-skill-to-console), [авторизационный сервер](https://yandex.ru/dev/dialogs/alice/doc/ru/auth/create-server). Создание/изменение настроек консоли в данный блок не входит. |
+| В консоли настраиваются client ID/secret, URL авторизации, выдачи/обновления токенов и разрешения | [Связка аккаунтов](https://yandex.ru/dev/dialogs/alice/doc/ru/auth/add-skill-to-console), [авторизационный сервер](https://yandex.ru/dev/dialogs/alice/doc/ru/auth/create-server). Настройка реального черновика навыка выполняется в согласованном блоке account-linking при участии пользователя; сама консоль ещё не настроена. |
 
 Ниже — **решения Planly**, а не обещания Яндекса о поддержке конкретной модели Станции или версии приложения. Базовые OAuth-форматы опираются на [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html), отзыв — на [RFC 7009](https://www.rfc-editor.org/rfc/rfc7009.html); рекомендации безопасности — [RFC 9700](https://www.rfc-editor.org/rfc/rfc9700.html).
 
-### Роли, разрешения и endpoints — целевые, не действующие
+### Роли, разрешения и endpoints — account-linking реализован, voice-create выключен
 
 Один зарегистрированный конфиденциальный OAuth client для навыка. Planly аутентифицирует свой аккаунт существующей browser-сессией и отдельно спрашивает согласие. Единственное разрешение первой версии — `planly:voice:create`: создание разовых Task/Event и Birthday через адаптер, без чтения личного расписания, изменения/удаления записей и создания серий. Выдача grant ещё не включает запись: её дополнительно ограничивает политика поверхности.
 
 | Метод и маршрут | Аутентификация и результат |
 |---|---|
-| `GET /oauth/authorize` | Будущая React-страница входа/согласия. Принимает OAuth query; GET не выдаёт код автоматически. Пользователь входит в существующий аккаунт Planly и видит клиента/разрешение. |
+| `GET /oauth/authorize` | React-страница входа/согласия. Принимает OAuth query; GET не выдаёт код автоматически. Пользователь входит в существующий аккаунт Planly и видит клиента/разрешение. |
 | `POST /api/v1/oauth/authorization-requests` | Cookie + Origin + CSRF; JSON `{clientId,redirectUri,responseType,state,scope,codeChallenge?,codeChallengeMethod?}`. Сервер валидирует клиента/параметры, создаёт привязанный к текущему владельцу запрос согласия на 10 минут; `201 {id,clientName,scope,expiresAt}`. |
 | `GET /api/v1/oauth/authorization-requests/{id}` | Cookie; только свой непросроченный запрос, `200 {id,clientName,scope,expiresAt}`. Чужой/просроченный — `404`. Нет client secret/кода/токенов. |
-| `POST /api/v1/oauth/authorization-requests/{id}/decision` | Cookie + Origin + CSRF, `{decision:"allow"|"deny"}`; `200 {redirectUrl}` только на проверенный callback: при allow — code/state/client_id/scope, при deny — error=access_denied/state (client_id/scope по настройке Диалогов). Сохранённые параметры возвращаются с исходными значениями, корректно URL-encoded. Будущий React выполняет переход; сервер не принимает готовый redirectUrl из тела. Повторное решение — `409`, чужой/просроченный запрос — `404`. |
+| `POST /api/v1/oauth/authorization-requests/{id}/decision` | Cookie + Origin + CSRF, `{decision:"allow"|"deny"}`; `200 {redirectUrl}` только на проверенный callback: при allow — code/state/client_id/scope, при deny — error=access_denied/state (client_id/scope по настройке Диалогов). Сохранённые параметры возвращаются с исходными значениями, корректно URL-encoded. React выполняет переход; сервер не принимает готовый redirectUrl из тела. Повторное решение — `409`, чужой/просроченный запрос — `404`. |
 | `POST /oauth/token` | Form-urlencoded; аутентификация OAuth client. Grant authorization_code или refresh_token; OAuth JSON. URL одинаков для выдачи/обновления в консоли. |
 | `POST /oauth/revoke` | Form-urlencoded token, опционально token_type_hint; аутентификация OAuth client. `200` с пустым телом в том числе для неизвестного/уже отозванного своего токена, без раскрытия чужих grants. |
 | `GET /api/v1/me/oauth-grants` | Cookie; только свои `{items:[{id,clientName,scope,createdAt,expiresAt}]}`, без токенов, секретов и текстов команд. |
 | `DELETE /api/v1/me/oauth-grants/{id}` | Cookie + Origin + CSRF; отзыв своего grant и всех его кодов/токенов/черновиков, `204`. Чужой/неверный id — `404`; повторный отзыв существующего своего grant идемпотентен. |
 | `POST /api/v1/integrations/alice/webhook` | Протокол Диалогов + проверенный Bearer grant; не browser-cookie. Разрешён только настроенный skill_id. Никаких публичных отдельных voice-create endpoints поверх старых CRUD. |
 
-Новые browser API используют существующий problem+json и правила доступа. OAuth token/revoke используют стандартные OAuth JSON-ошибки, а webhook — формат Диалогов; это явные исключения, не изменение ошибок старого API. Таблица не означает наличия routes в router.
+Новые browser API используют существующий problem+json и правила доступа. OAuth token/revoke используют стандартные OAuth JSON-ошибки, а webhook — формат Диалогов; это явные исключения, не изменение ошибок старого API. Перечисленные OAuth и webhook routes присутствуют в router при включённой конфигурации; сам voice-create не реализован.
 
 ### Согласие, коды и токены
 

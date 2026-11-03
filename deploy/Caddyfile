@@ -1,0 +1,6 @@
+# Host Caddy: enable after home DNS and TCP 80/443 reach this Raspberry.
+# Keep the existing loopback-only web binding in compose.server.yaml.
+planly-planly.duckdns.org {
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:5173
+}
