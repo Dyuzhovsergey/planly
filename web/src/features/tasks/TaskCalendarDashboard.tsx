@@ -14,12 +14,12 @@ import interactionPlugin from '@fullcalendar/react/interaction'
 import ruLocale from '@fullcalendar/react/locales/ru'
 import timeGridPlugin from '@fullcalendar/react/timegrid'
 import monarchThemePlugin from '@fullcalendar/react/themes/monarch'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { SuccessNotice } from '../../shared/ui/SuccessNotice'
 
 import { ApiError } from '../../shared/api/client'
-import { BirthdayIcon, EventIcon, PlusIcon, TasksIcon, ReopenIcon } from '../../shared/ui/icons'
+import { BirthdayIcon, EventIcon, FilterIcon, PlusIcon, TasksIcon, ReopenIcon } from '../../shared/ui/icons'
 import { Modal } from '../../shared/ui/Modal'
 import { SegmentedControl } from '../../shared/ui/SegmentedControl'
 import { BirthdayDialog } from '../birthdays/BirthdayDialog'
@@ -87,15 +87,17 @@ export function TaskCalendarDashboard({
 }: TaskCalendarDashboardProps) {
   const { timeFormat, weekStartsOn } = useCalendarPreferences()
 
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const filtersID = useId()
   const isMobile = useMobileCalendar()
   const [searchParams, setSearchParams] = useSearchParams()
   const fallbackDate = useMemo(() => currentCalendarDate(timeZone), [timeZone])
   const calendarURLState = useMemo(
     () => parseCalendarURLState(searchParams, {
-      view: isMobile ? 'day' : 'month',
+      view: 'month',
       date: fallbackDate,
     }),
-    [fallbackDate, isMobile, searchParams],
+    [fallbackDate, searchParams],
   )
   const [range, setRange] = useState<TaskListRange | null>(null)
   const repeatTasks=useOccurrences('task',range,timeZone,onAuthenticationRequired)
@@ -307,7 +309,13 @@ export function TaskCalendarDashboard({
           </button>
         </div>
 
-        <fieldset className="mb-4 flex flex-wrap gap-x-5 gap-y-2 text-sm">
+        <div className="mb-4">
+          <button type="button" className="planly-button-secondary gap-2" aria-expanded={filtersOpen} aria-controls={filtersID} onClick={() => setFiltersOpen(!filtersOpen)}>
+            <FilterIcon className="size-4" />Фильтр
+            <span className="text-xs text-[var(--color-muted)]">{Number(showTasks) + Number(showEvents) + Number(showBirthdays)}/3</span>
+          </button>
+        </div>
+        <fieldset id={filtersID} hidden={!filtersOpen} className={filtersOpen ? "mb-4 flex flex-wrap gap-x-5 gap-y-2 rounded-xl border border-[var(--color-border)] p-3 text-sm" : "hidden"}>
           <legend className="sr-only">Показывать в календаре</legend>
           <label className="flex min-h-11 cursor-pointer items-center gap-2"><input type="checkbox" checked={showTasks} onChange={(e) => setShowTasks(e.target.checked)} className="size-4 accent-[var(--color-accent)]" /><TasksIcon className="size-4" />Задачи</label>
           <label className="flex min-h-11 cursor-pointer items-center gap-2"><input type="checkbox" checked={showEvents} onChange={(e) => setShowEvents(e.target.checked)} className="size-4 accent-[var(--color-accent)]" /><EventIcon className="size-4" />Мероприятия</label>

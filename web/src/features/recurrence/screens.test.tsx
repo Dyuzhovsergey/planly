@@ -70,6 +70,7 @@ it('renders both occurrence kinds in the calendar, routes clicks safely and appl
  fireEvent.click(screen.getByRole('button',{name:'Календарная запись Повтор встречи'}));const modal=await screen.findByRole('dialog');await within(modal).findByText('Место: Зал серии')
  expect(fetchMock.mock.calls.some(([path])=>path.startsWith('/api/v1/events/occurrence:'))).toBe(false)
  fireEvent.click(within(modal).getByRole('button',{name:'Закрыть окно'}));await waitFor(()=>expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+ fireEvent.click(screen.getByRole('button',{name:/Фильтр/}))
  fireEvent.click(screen.getByRole('checkbox',{name:'Задачи'}))
  expect(screen.queryByRole('button',{name:'Календарная запись Индивидуальная задача'})).not.toBeInTheDocument();expect(screen.queryByRole('button',{name:'Календарная запись Разовая задача'})).not.toBeInTheDocument()
  await screen.findByRole('button',{name:'Календарная запись Повтор встречи'})

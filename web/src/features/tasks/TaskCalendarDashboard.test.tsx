@@ -466,7 +466,7 @@ describe('TaskCalendarDashboard', () => {
     expect(init.body).toBeUndefined()
   })
 
-  it('uses a day calendar on narrow screens', () => {
+  it.each([['/app', 'dayGridMonth'], ['/app?view=day&date=2026-11-03', 'timeGridDay'], ['/app?view=week&date=2026-11-03', 'timeGridWeek']])('uses month by default and respects explicit views on narrow screens: %s', (path, view) => {
     vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({
       matches: true,
       addEventListener: vi.fn(),
@@ -474,10 +474,27 @@ describe('TaskCalendarDashboard', () => {
     }))
     vi.stubGlobal('fetch', vi.fn())
 
-    renderDashboard()
+    renderDashboard(vi.fn(), path)
 
-    expect(screen.getByTestId('calendar')).toHaveAttribute('data-view', 'timeGridDay')
+    expect(screen.getByTestId('calendar')).toHaveAttribute('data-view', view)
     expect(screen.getByRole('heading', { name: 'Задачи выбранного дня' })).toBeInTheDocument()
+  })
+
+  it('collapses filters without resetting the chosen visibility', () => {
+    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(() => undefined)))
+    renderDashboard()
+    const toggle = screen.getByRole('button', { name: /Фильтр/ })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByRole('checkbox', { name: 'Задачи' })).not.toBeInTheDocument()
+    fireEvent.click(toggle)
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Задачи' }))
+    expect(toggle).toHaveTextContent('2/3')
+    fireEvent.click(toggle)
+    expect(screen.queryByRole('checkbox', { name: 'Задачи' })).not.toBeInTheDocument()
+    fireEvent.click(toggle)
+    expect(screen.getByRole('checkbox', { name: 'Задачи' })).not.toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'Мероприятия' })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'Дни рождения' })).toBeChecked()
   })
 
   it('combines namespaced meetings with tasks and filters visibility without refetching', async () => {
@@ -490,6 +507,7 @@ describe('TaskCalendarDashboard', () => {
     await waitFor(() => expect(screen.getByTestId('calendar-task-count')).toHaveTextContent('2'))
     expect(calendarHarness.props?.events.map((value) => value.id)).toEqual([task.id, `event:${task.id}`])
     expect(calendarHarness.props?.events[1].startEditable).toBe(false)
+    fireEvent.click(screen.getByRole('button', { name: /Фильтр/ }))
     fireEvent.click(screen.getByRole('checkbox', { name: 'Мероприятия' }))
     expect(screen.getByTestId('calendar-task-count')).toHaveTextContent('1')
     fireEvent.click(screen.getByRole('checkbox', { name: 'Мероприятия' }))
@@ -528,6 +546,7 @@ describe('TaskCalendarDashboard', () => {
     await waitFor(() => expect(screen.getByTestId('calendar-task-count')).toHaveTextContent('2'))
     expect(calendarHarness.props?.events.map((value) => value.id)).toEqual([task.id, `birthday:${task.id}:2026-10-22`])
     expect(calendarHarness.props?.events[1].startEditable).toBe(false)
+    fireEvent.click(screen.getByRole('button', { name: /Фильтр/ }))
     fireEvent.click(screen.getByRole('checkbox', { name: 'Дни рождения' }))
     expect(screen.getByTestId('calendar-task-count')).toHaveTextContent('1')
     fireEvent.click(screen.getByRole('checkbox', { name: 'Дни рождения' }))

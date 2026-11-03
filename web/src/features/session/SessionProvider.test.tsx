@@ -1,3 +1,4 @@
+vi.mock('../oauth/AliceSettings', () => ({ AliceSettings: () => null }))
 import { changeField } from '../../shared/ui/date-time-testing'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, useLocation } from 'react-router'
@@ -139,6 +140,38 @@ describe('session restoration', () => {
       '/api/v1/me',
       expect.objectContaining({ credentials: 'include' }),
     )
+  })
+
+  it('opens the navigation drawer, traps focus, restores focus and closes after navigation', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(authEnvelope)))
+    renderApplication('/app')
+    const trigger = await screen.findByRole('button', { name: 'Открыть меню' })
+    trigger.focus()
+    fireEvent.click(trigger)
+    let dialog = screen.getByRole('dialog', { name: 'Меню Planly' })
+    expect(trigger).toHaveAttribute('aria-expanded', 'true')
+    expect(document.body.style.overflow).toBe('hidden')
+    expect(within(dialog).getAllByRole('link')).toHaveLength(6)
+    const close = within(dialog).getByRole('button', { name: 'Закрыть окно' })
+    close.focus()
+    fireEvent.keyDown(close, { key: 'Tab', shiftKey: true })
+    expect(within(dialog).getByRole('link', { name: 'Настройки' })).toHaveFocus()
+    fireEvent.keyDown(document.activeElement!, { key: 'Tab' })
+    expect(close).toHaveFocus()
+    fireEvent.keyDown(dialog, { key: 'Escape' })
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(trigger).toHaveFocus()
+    expect(document.body.style.overflow).not.toBe('hidden')
+    fireEvent.click(trigger)
+    dialog = screen.getByRole('dialog', { name: 'Меню Planly' })
+    fireEvent.mouseDown(dialog.parentElement!)
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    fireEvent.click(trigger)
+    dialog = screen.getByRole('dialog', { name: 'Меню Planly' })
+    fireEvent.click(within(dialog).getByRole('link', { name: 'Задачи' }))
+    await expectLocation('/tasks')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(trigger).toHaveAttribute('aria-expanded', 'false')
   })
 
   it('navigates between the protected calendar and task list sections', async () => {

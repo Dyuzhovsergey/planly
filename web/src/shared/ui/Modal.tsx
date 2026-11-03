@@ -2,11 +2,12 @@ import { useEffect, useId, useRef, type ReactNode, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 
 interface ModalProps {
+  variant?: 'dialog' | 'drawer'
   title: string; children: ReactNode; busy?: boolean; focusKey?: string
   role?: 'dialog' | 'alertdialog'; onClose: () => void; fallbackFocusRef: RefObject<HTMLElement | null>
 }
 
-export function Modal({ title, children, busy = false, focusKey, role = 'dialog', onClose, fallbackFocusRef }: ModalProps) {
+export function Modal({ variant = 'dialog', title, children, busy = false, focusKey, role = 'dialog', onClose, fallbackFocusRef }: ModalProps) {
   const titleID = useId()
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -25,9 +26,9 @@ export function Modal({ title, children, busy = false, focusKey, role = 'dialog'
     target?.focus()
   }, [focusKey])
   return createPortal(
-    <div className="planly-dialog-backdrop fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/50 p-4 sm:p-6" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) onClose() }}>
+    <div className={`planly-dialog-backdrop fixed inset-0 z-50 grid overflow-y-auto bg-black/50 ${variant === 'drawer' ? 'place-items-start' : 'place-items-center p-4 sm:p-6'}`} onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) onClose() }}>
       <div ref={ref} tabIndex={-1} role={role} aria-modal="true" aria-labelledby={titleID} aria-busy={busy}
-        className="planly-dialog-panel planly-card my-auto max-h-[calc(100dvh-2rem)] w-full max-w-xl overflow-y-auto p-5 sm:p-6"
+        className={variant === 'drawer' ? "planly-drawer-panel w-[min(20rem,calc(100vw-2rem))] h-dvh overflow-y-auto bg-[var(--color-sidebar)] px-5 pt-[max(1.25rem,env(safe-area-inset-top))] pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl" : "planly-dialog-panel planly-card my-auto max-h-[calc(100dvh-2rem)] w-full max-w-xl overflow-y-auto p-5 sm:p-6"}
         onKeyDown={(event) => {
           if (event.key === 'Escape') { event.preventDefault(); if (!busy) onClose(); return }
           if (event.key !== 'Tab') return

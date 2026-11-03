@@ -1,6 +1,6 @@
 import { UserAvatar } from '../shared/ui/UserAvatar'
 import { CalendarPreferencesContext } from '../shared/calendar/preferences'
-import { lazy, Suspense, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { Link, Navigate, NavLink, Outlet, Route, Routes, useNavigate } from 'react-router'
 
 import { LoginForm } from '../features/session/LoginForm'
@@ -8,6 +8,8 @@ import { RegistrationForm } from '../features/session/RegistrationForm'
 import { useSession } from '../features/session/session-context'
 import type { LoginCredentials, RegistrationInput } from '../features/session/types'
 import { NotesIcon, BirthdayIcon, CalendarIcon, EventIcon, LogOutIcon, SettingsIcon, TasksIcon } from '../shared/ui/icons'
+import { Modal } from '../shared/ui/Modal'
+import { MenuIcon } from '../shared/ui/icons'
 import { PlanlyLogo } from '../shared/ui/PlanlyLogo'
 
 const TaskCalendarDashboard = lazy(() =>
@@ -30,11 +32,14 @@ const SettingsPage = lazy(() => import('../features/settings/SettingsPage').then
 
 const NoteListPage = lazy(() => import('../features/notes/NoteListPage').then(module => ({default:module.NoteListPage})))
 
+const AuthorizePage = lazy(() => import('../features/oauth/AuthorizePage').then(module => ({default:module.AuthorizePage})))
+
 type AuthMode = 'login' | 'registration'
 
 export function App() {
   return (
     <Routes>
+      <Route path="/oauth/authorize" element={<Suspense fallback={<p role="status">Загрузка…</p>}><AuthorizePage /></Suspense>} />
       <Route path="/" element={<SessionEntryRoute />} />
       <Route path="/login" element={<AnonymousRoute mode="login" />} />
       <Route path="/register" element={<AnonymousRoute mode="registration" />} />
@@ -171,6 +176,17 @@ function AuthenticatedAppShell() {
   const navigate = useNavigate()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [logoutError, setLogoutError] = useState(false)
+  const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const menuButtonRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    if (!isMenuOpen || typeof window.matchMedia !== 'function') return
+    const media = window.matchMedia('(min-width: 1024px)')
+    const closeOnDesktop = () => { if (media.matches) setIsMenuOpen(false) }
+    closeOnDesktop()
+    media.addEventListener('change', closeOnDesktop)
+    return () => media.removeEventListener('change', closeOnDesktop)
+  }, [isMenuOpen])
 
   if (state.status !== 'authenticated') {
     return null
@@ -215,11 +231,21 @@ function AuthenticatedAppShell() {
 
         <div className="min-w-0">
           <header className="sticky top-0 z-30 flex items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-sidebar)] px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] lg:hidden">
-            <PlanlyLogo compact />
+            <div className="flex min-w-0 items-center gap-2">
+              <button ref={menuButtonRef} type="button" className="planly-button-secondary size-11 shrink-0 p-0" aria-label="Открыть меню" aria-haspopup="dialog" aria-expanded={isMenuOpen} onClick={() => setIsMenuOpen(true)}><MenuIcon /></button>
+              <PlanlyLogo compact />
+            </div>
             <div className="flex items-center gap-1"><Link to="/settings" aria-label="Настройки профиля" className="grid size-11 place-items-center rounded-xl text-[var(--color-muted)] hover:text-[var(--color-ink)] focus-visible:outline-2 focus-visible:outline-[var(--color-focus)]"><UserAvatar name={state.user.displayName || state.user.username} src={state.user.avatarUrl} className="size-8 text-sm" /></Link>
             <button className="grid size-11 cursor-pointer place-items-center rounded-xl text-[var(--color-muted)] hover:bg-[var(--color-surface-muted)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]" type="button" aria-label="Выйти из мобильного интерфейса" disabled={isLoggingOut} onClick={handleLogout}><LogOutIcon /></button></div>
           </header>
-          <nav className="grid grid-cols-3 gap-1 border-b border-[var(--color-border)] bg-[var(--color-sidebar)] px-4 py-2 lg:hidden" aria-label="Разделы приложения">
+          <div className="p-3 sm:p-5 lg:p-7" id="planly-workspace">
+            {logoutError && <p className="planly-error mb-4" role="alert">Не удалось выйти. Проверьте соединение и повторите попытку.</p>}
+            <CalendarPreferencesContext.Provider value={{ timeFormat: state.user.timeFormat ?? '24h', weekStartsOn: state.user.weekStartsOn ?? 'monday' }}><Outlet /></CalendarPreferencesContext.Provider>
+          </div>
+        </div>
+      </div>
+      {isMenuOpen && <Modal title="Меню Planly" variant="drawer" fallbackFocusRef={menuButtonRef} onClose={() => setIsMenuOpen(false)}>
+          <nav className="space-y-2" onClick={(event) => { if ((event.target as HTMLElement).closest('a')) setIsMenuOpen(false) }} aria-label="Разделы приложения">
             <AppNavigationLink to="/app" label="Календарь" icon={<CalendarIcon className="size-4" />} />
             <AppNavigationLink to="/tasks" label="Задачи" icon={<TasksIcon className="size-4" />} />
             <AppNavigationLink to="/events" label="Мероприятия" icon={<EventIcon className="size-4" />} />
@@ -227,12 +253,7 @@ function AuthenticatedAppShell() {
             <AppNavigationLink to="/notes" label="Заметки" icon={<NotesIcon className="size-4" />} />
             <AppNavigationLink to="/settings" label="Настройки" icon={<SettingsIcon className="size-4" />} />
           </nav>
-          <div className="p-3 sm:p-5 lg:p-7" id="planly-workspace">
-            {logoutError && <p className="planly-error mb-4" role="alert">Не удалось выйти. Проверьте соединение и повторите попытку.</p>}
-            <CalendarPreferencesContext.Provider value={{ timeFormat: state.user.timeFormat ?? '24h', weekStartsOn: state.user.weekStartsOn ?? 'monday' }}><Outlet /></CalendarPreferencesContext.Provider>
-          </div>
-        </div>
-      </div>
+      </Modal>}
     </main>
   )
 }
@@ -248,13 +269,13 @@ function AppNavigationLink({
 }) {
   return (
     <NavLink
-      className={({ isActive }) => `planly-navigation-link flex min-h-11 flex-col items-center justify-center gap-1 rounded-xl px-1 text-xs font-semibold sm:flex-row sm:gap-2 sm:px-3 sm:text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)] lg:justify-start ${isActive
+      className={({ isActive }) => `planly-navigation-link flex min-h-11 flex-row items-center justify-start gap-2 rounded-xl px-3 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)] lg:justify-start ${isActive
         ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent-strong)]'
         : 'text-[var(--color-muted)] hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-ink)]'}`}
       to={to}
     >
       {icon}
-      <span className="min-w-0 break-words text-center lg:text-left">{label}</span>
+      <span className="min-w-0 break-words text-left">{label}</span>
     </NavLink>
   )
 }
@@ -306,7 +327,7 @@ function SettingsScreen() {
   const { state, retry, saveSettings, saveAvatar } = useSession()
   if (state.status !== 'authenticated') return null
   return <Suspense fallback={<p className="planly-card p-5" role="status">Открываем настройки…</p>}>
-    <SettingsPage key={state.user.id} user={state.user} onSave={saveSettings} onSaveAvatar={saveAvatar} onAuthenticationRequired={retry} onClose={() => void navigate('/app')} />
+    <SettingsPage aliceCSRFToken={state.csrfToken} key={state.user.id} user={state.user} onSave={saveSettings} onSaveAvatar={saveAvatar} onAuthenticationRequired={retry} onClose={() => void navigate('/app')} />
   </Suspense>
 }
 

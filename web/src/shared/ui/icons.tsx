@@ -127,3 +127,11 @@ export function SettingsIcon({ className = 'size-5' }: IconProps) {
 }
 
 export function NotesIcon({className='size-5'}:IconProps) {return <svg {...common} className={className}><path d="M5 3h14v18H5zM8 7h8M8 11h8M8 15h5"/></svg>}
+
+export function MenuIcon({ className = 'size-5' }: IconProps) {
+  return <svg {...common} className={className}><path d="M4 6h16M4 12h16M4 18h16" /></svg>
+}
+
+export function FilterIcon({ className = 'size-5' }: IconProps) {
+  return <svg {...common} className={className}><path d="M4 5h16l-6 7v6l-4 2v-8Z" /></svg>
+}

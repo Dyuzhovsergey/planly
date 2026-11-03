@@ -730,3 +730,14 @@
 .planly-calendar .planly-event--completed {
   background-color: var(--color-surface-muted);
 }
+
+@keyframes planly-drawer-in {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
+@layer components {
+  .planly-drawer-panel {
+    animation: planly-drawer-in 220ms ease-out both;
+  }
+}

@@ -1,3 +1,4 @@
+import { AliceSettings } from '../oauth/AliceSettings'
 import { SelectField } from '../../shared/ui/SelectField'
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { AvatarSettings } from './AvatarSettings'
@@ -8,8 +9,8 @@ import { SuccessNotice } from '../../shared/ui/SuccessNotice'
 import type { AuthEnvelope, User } from '../session/types'
 import { profileChanges, profileSettings, timeZones, validateProfile, type ProfileSettings, type ProfileUpdate } from './profile'
 
-interface Props { onSaveAvatar: (change: AvatarChange) => Promise<AuthEnvelope>; user: User; onSave: (changes: ProfileUpdate) => Promise<AuthEnvelope>; onAuthenticationRequired: () => void; onClose: () => void }
-export function SettingsPage({ user, onSave, onAuthenticationRequired, onClose, onSaveAvatar }: Props) {
+interface Props { aliceCSRFToken?: string; onSaveAvatar: (change: AvatarChange) => Promise<AuthEnvelope>; user: User; onSave: (changes: ProfileUpdate) => Promise<AuthEnvelope>; onAuthenticationRequired: () => void; onClose: () => void }
+export function SettingsPage({ aliceCSRFToken, user, onSave, onAuthenticationRequired, onClose, onSaveAvatar }: Props) {
   const [original, setOriginal] = useState(() => profileSettings(user))
   const [draft, setDraft] = useState(original)
   const [busy, setBusy] = useState(false)
@@ -55,6 +56,7 @@ export function SettingsPage({ user, onSave, onAuthenticationRequired, onClose, 
       <button className="planly-button-secondary size-11 shrink-0 p-0" type="button" aria-label="Закрыть настройки" title="Вернуться в календарь" onClick={onClose}>×</button>
     </div>
     <p className="mt-2 text-sm leading-6 text-[var(--color-muted)]">Профиль и календарь на ваших устройствах.</p>
+    {aliceCSRFToken && <AliceSettings csrf={aliceCSRFToken} />}
     <AvatarSettings user={user} onSave={onSaveAvatar} onAuthenticationRequired={onAuthenticationRequired} />
     <form ref={formRef} className="mt-6 space-y-4" onSubmit={(e) => void submit(e)} noValidate aria-busy={busy}>
       <fieldset className="planly-card min-w-0 space-y-5 p-5 sm:p-6" disabled={busy}>
