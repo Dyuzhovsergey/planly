@@ -398,12 +398,12 @@ export function TaskCalendarDashboard({
           <SuccessNotice className="mb-4">{taskNotice}</SuccessNotice>
         )}
 
-        {showBirthdays && <section className="planly-card p-4" aria-label="Дни рождения на экране">
-          <h2 className="text-lg font-semibold">Дни рождения на экране</h2>
+        {showBirthdays && <section className="planly-card p-4" aria-label="Дни рождения">
+          <h2 className="text-lg font-semibold">Дни рождения</h2>
           {birthdayData.status === 'loaded' && (birthdayData.occurrences.length ? <ul className="mt-2 divide-y divide-[var(--color-border)]">{birthdayData.occurrences.map((value) => <li key={birthdayCalendarID(value)}><button type="button" className="min-h-11 w-full cursor-pointer py-3 text-left focus-visible:outline-2 focus-visible:outline-[var(--color-focus)]" onClick={() => { setBirthdayDialog(value.birthdayId); setSelectedTask(null) }}><span className="block break-words text-sm font-semibold">{value.name}</span><span className="mt-1 block text-xs leading-5 text-[var(--color-muted)]">{birthdayDateLabel(value.date)} · {birthdayAgeLabel(value.age)}</span></button></li>)}</ul> : <p className="mt-2 text-sm text-[var(--color-muted)]">В этом диапазоне нет дней рождения.</p>)}
         </section>}
-        {showEvents && <section className="planly-card p-4" aria-label="Мероприятия на экране">
-          <h2 className="text-lg font-semibold">Мероприятия на экране</h2>
+        {showEvents && <section className="planly-card p-4" aria-label="Мероприятия">
+          <h2 className="text-lg font-semibold">Мероприятия</h2>
           {(eventData.status === 'loaded'||repeatEvents.items.length>0) && (meetings.length ? <ul className="mt-2 divide-y divide-[var(--color-border)]">{meetings.map((value) => <li key={value.id}><button className="w-full cursor-pointer py-3 text-left focus-visible:outline-2 focus-visible:outline-[var(--color-focus)]" type="button" onClick={() => { if(value.recurrence)setOccurrence({value:value.recurrence});else setEventDialog(value); setSelectedTask(null) }}><span className="block break-words text-sm font-semibold">{value.recurrence?'Повторение · ':''}{value.title}</span><span className="mt-1 block text-xs leading-5 text-[var(--color-muted)]">{formatEventSchedule(value, timeZone, timeFormat)}</span></button></li>)}</ul> : repeatEvents.status==='loaded' ? <p className="mt-2 text-sm text-[var(--color-muted)]">В этом диапазоне нет мероприятий.</p> : null)}
         </section>}
         <TaskAgenda
